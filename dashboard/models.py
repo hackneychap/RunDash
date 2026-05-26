@@ -5,6 +5,7 @@ class RunActivity(models.Model):
     date = models.DateField(db_index=True)
     distance_km = models.FloatField()
     duration_minutes = models.FloatField()
+    elevation_gain = models.FloatField(null=True, blank=True, help_text="Elevation gain in meters")
     tss = models.FloatField(null=True, blank=True, help_text="Training Stress Score")
 
     class Meta:

@@ -62,10 +62,19 @@
     </div>
 </div>
 
-<div class="mt-8 card bg-base-100 shadow-xl border border-white/5">
-    <div class="card-body">
-        <h2 class="card-title text-xl mb-4">Weekly Training Stress Score (TSS)</h2>
-        <canvas id="tssChart" height="80"></canvas>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Weekly Training Stress Score (TSS)</h2>
+            <canvas id="tssChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Weekly Elevation Gain (m)</h2>
+            <canvas id="elevationChart"></canvas>
+        </div>
     </div>
 </div>
 
@@ -139,6 +148,34 @@
                 data: {{ weekly_tss|safe }},
                 backgroundColor: 'rgba(168, 85, 247, 0.1)',
                 borderColor: 'rgba(168, 85, 247, 1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // Elevation Chart
+    const ctxElevation = document.getElementById('elevationChart').getContext('2d');
+    new Chart(ctxElevation, {
+        type: 'line',
+        data: {
+            labels: {{ weekly_labels|safe }},
+            datasets: [{
+                label: 'Elevation Gain (m)',
+                data: {{ weekly_elevation|safe }},
+                backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                borderColor: 'rgba(245, 158, 11, 1)',
                 borderWidth: 2,
                 tension: 0.4,
                 fill: true
