@@ -27,13 +27,17 @@ def dashboard(request):
         total_tss=Sum('tss')
     ).order_by('month')
     
-    weekly_labels = [stat['week'].strftime('%Y-%m-%d') if stat['week'] else '' for stat in weekly_stats]
-    weekly_km = [round(stat['total_km'], 1) if stat['total_km'] else 0 for stat in weekly_stats]
-    weekly_tss = [round(stat['total_tss'], 1) if stat['total_tss'] else 0 for stat in weekly_stats]
-    weekly_elevation = [round(stat['total_elevation'], 1) if stat['total_elevation'] else 0 for stat in weekly_stats]
-    
-    monthly_labels = [stat['month'].strftime('%Y-%m') if stat['month'] else '' for stat in monthly_stats]
-    monthly_km = [round(stat['total_km'], 1) if stat['total_km'] else 0 for stat in monthly_stats]
+    weekly_labels, weekly_km, weekly_tss, weekly_elevation = [], [], [], []
+    for stat in weekly_stats:
+        weekly_labels.append(stat['week'].strftime('%Y-%m-%d') if stat['week'] else '')
+        weekly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
+        weekly_tss.append(round(stat['total_tss'], 1) if stat['total_tss'] else 0)
+        weekly_elevation.append(round(stat['total_elevation'], 1) if stat['total_elevation'] else 0)
+
+    monthly_labels, monthly_km = [], []
+    for stat in monthly_stats:
+        monthly_labels.append(stat['month'].strftime('%Y-%m') if stat['month'] else '')
+        monthly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
     
     context = {
         'total_km': round(total_km, 2),
