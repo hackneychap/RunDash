@@ -67,3 +67,19 @@ class SyncTaskTests(TestCase):
             # Verify data was imported
             run = RunActivity.objects.get(activity_id='12345')
             self.assertEqual(run.elevation_gain, 120.5)
+
+    @patch('dashboard.tasks.subprocess.run')
+    def test_sync_garmin_data_handles_subprocess_error(self, mock_subprocess):
+        import subprocess
+        # Setup mock to raise CalledProcessError
+        mock_subprocess.side_effect = subprocess.CalledProcessError(
+            returncode=1,
+            cmd=['garmindb_cli.py']
+        )
+
+        with patch.dict('os.environ', {'GARMIN_USERNAME': 'test', 'GARMIN_PASSWORD': 'test'}):
+            # This should catch the exception and return gracefully without crashing
+            sync_garmin_data()
+
+            # Verify the mock was actually called
+            mock_subprocess.assert_called_once()
