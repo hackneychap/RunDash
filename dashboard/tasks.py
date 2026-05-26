@@ -113,7 +113,7 @@ def sync_garmin_data():
     # The exact columns vary but usually it's activity_id, start_time, distance, elapsed_time, type
     try:
         cursor.execute("""
-            SELECT activity_id, start_time, distance, elapsed_time, tss 
+            SELECT activity_id, start_time, distance, elapsed_time, tss, ascent
             FROM activities 
             WHERE type = 'running'
             ORDER BY start_time DESC
@@ -147,6 +147,7 @@ def sync_garmin_data():
                         duration_minutes = 0.0
 
                 tss = float(run['tss']) if run['tss'] is not None else None
+                elevation_gain = float(run['ascent']) if 'ascent' in run.keys() and run['ascent'] is not None else None
 
                 RunActivity.objects.update_or_create(
                     activity_id=activity_id,
@@ -154,7 +155,8 @@ def sync_garmin_data():
                         'date': run_date,
                         'distance_km': distance_km,
                         'duration_minutes': duration_minutes,
-                        'tss': tss
+                        'tss': tss,
+                        'elevation_gain': elevation_gain
                     }
                 )
             except Exception as e:

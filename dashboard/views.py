@@ -17,7 +17,8 @@ def dashboard(request):
     weekly_stats = runs.annotate(week=TruncWeek('date')).values('week').annotate(
         total_km=Sum('distance_km'),
         total_duration=Sum('duration_minutes'),
-        total_tss=Sum('tss')
+        total_tss=Sum('tss'),
+        total_elevation=Sum('elevation_gain')
     ).order_by('week')
     
     monthly_stats = runs.annotate(month=TruncMonth('date')).values('month').annotate(
@@ -29,6 +30,7 @@ def dashboard(request):
     weekly_labels = [stat['week'].strftime('%Y-%m-%d') if stat['week'] else '' for stat in weekly_stats]
     weekly_km = [round(stat['total_km'], 1) if stat['total_km'] else 0 for stat in weekly_stats]
     weekly_tss = [round(stat['total_tss'], 1) if stat['total_tss'] else 0 for stat in weekly_stats]
+    weekly_elevation = [round(stat['total_elevation'], 1) if stat['total_elevation'] else 0 for stat in weekly_stats]
     
     monthly_labels = [stat['month'].strftime('%Y-%m') if stat['month'] else '' for stat in monthly_stats]
     monthly_km = [round(stat['total_km'], 1) if stat['total_km'] else 0 for stat in monthly_stats]
@@ -40,6 +42,7 @@ def dashboard(request):
         'weekly_labels': json.dumps(weekly_labels),
         'weekly_km': json.dumps(weekly_km),
         'weekly_tss': json.dumps(weekly_tss),
+        'weekly_elevation': json.dumps(weekly_elevation),
         'monthly_labels': json.dumps(monthly_labels),
         'monthly_km': json.dumps(monthly_km),
     }
