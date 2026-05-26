@@ -1,0 +1,159 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+    <div>
+        <h1 class="text-4xl font-extrabold tracking-tight">Your Running Metrics</h1>
+        <p class="text-base-content/70 mt-2">Past 2 years overview</p>
+    </div>
+    
+    <!-- Sync Button triggers background task via HTMX -->
+    <div id="sync-container">
+        <button hx-get="{% url 'trigger_sync' %}" hx-swap="outerHTML" hx-target="#sync-container" class="btn btn-primary shadow-lg shadow-primary/30 transition-transform hover:scale-105">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Sync Garmin Data
+        </button>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+    <div class="stat bg-base-100 rounded-2xl shadow-xl border border-white/5 relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div class="stat-figure text-blue-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
+        </div>
+        <div class="stat-title font-medium">Total Distance</div>
+        <div class="stat-value text-blue-500">{{ total_km }} <span class="text-xl font-normal">km</span></div>
+    </div>
+    
+    <div class="stat bg-base-100 rounded-2xl shadow-xl border border-white/5 relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div class="stat-figure text-emerald-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        </div>
+        <div class="stat-title font-medium">Total Duration</div>
+        <div class="stat-value text-emerald-500">{{ total_duration }} <span class="text-xl font-normal">hrs</span></div>
+    </div>
+    
+    <div class="stat bg-base-100 rounded-2xl shadow-xl border border-white/5 relative overflow-hidden group">
+        <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+        <div class="stat-figure text-purple-500">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+        </div>
+        <div class="stat-title font-medium">Avg TSS</div>
+        <div class="stat-value text-purple-500">{{ avg_tss }}</div>
+    </div>
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Weekly Distance (km)</h2>
+            <canvas id="weeklyChart"></canvas>
+        </div>
+    </div>
+    
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Monthly Distance (km)</h2>
+            <canvas id="monthlyChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<div class="mt-8 card bg-base-100 shadow-xl border border-white/5">
+    <div class="card-body">
+        <h2 class="card-title text-xl mb-4">Weekly Training Stress Score (TSS)</h2>
+        <canvas id="tssChart" height="80"></canvas>
+    </div>
+</div>
+
+<script>
+    // Theme defaults for Chart.js
+    Chart.defaults.color = '#9ca3af';
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    
+    // Weekly Chart
+    const ctxWeekly = document.getElementById('weeklyChart').getContext('2d');
+    new Chart(ctxWeekly, {
+        type: 'bar',
+        data: {
+            labels: {{ weekly_labels|safe }},
+            datasets: [{
+                label: 'Distance (km)',
+                data: {{ weekly_km|safe }},
+                backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // Monthly Chart
+    const ctxMonthly = document.getElementById('monthlyChart').getContext('2d');
+    new Chart(ctxMonthly, {
+        type: 'bar',
+        data: {
+            labels: {{ monthly_labels|safe }},
+            datasets: [{
+                label: 'Distance (km)',
+                data: {{ monthly_km|safe }},
+                backgroundColor: 'rgba(16, 185, 129, 0.5)',
+                borderColor: 'rgba(16, 185, 129, 1)',
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // TSS Chart
+    const ctxTss = document.getElementById('tssChart').getContext('2d');
+    new Chart(ctxTss, {
+        type: 'line',
+        data: {
+            labels: {{ weekly_labels|safe }},
+            datasets: [{
+                label: 'TSS',
+                data: {{ weekly_tss|safe }},
+                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                borderColor: 'rgba(168, 85, 247, 1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+</script>
+{% endblock %}
