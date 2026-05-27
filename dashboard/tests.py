@@ -81,6 +81,14 @@ class SyncTaskTests(TestCase):
             run = RunActivity.objects.get(activity_id='12345')
             self.assertEqual(run.elevation_gain, 120.5)
 
+    @patch('builtins.print')
+    @patch('dashboard.tasks.os.makedirs')
+    def test_sync_garmin_data_missing_credentials(self, mock_makedirs, mock_print):
+        with patch.dict('os.environ', {'GARMIN_USERNAME': '', 'GARMIN_PASSWORD': ''}):
+            sync_garmin_data()
+
+            mock_print.assert_any_call("Garmin credentials missing in .env")
+            mock_makedirs.assert_not_called()
     @patch('dashboard.tasks.subprocess.run')
     def test_sync_garmin_data_handles_subprocess_error(self, mock_subprocess):
         import subprocess
