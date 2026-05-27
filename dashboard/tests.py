@@ -33,6 +33,19 @@ class DashboardViewTests(TestCase):
 from unittest.mock import patch, MagicMock
 from .tasks import sync_garmin_data
 
+class TriggerSyncViewTests(TestCase):
+    @patch('dashboard.views.async_task')
+    def test_trigger_sync_view(self, mock_async_task):
+        mock_async_task.return_value = 'mock-task-123'
+
+        response = self.client.get('/trigger-sync/')
+
+        self.assertEqual(response.status_code, 200)
+        mock_async_task.assert_called_once_with(sync_garmin_data)
+
+        self.assertIn('hx-get="/sync-status/mock-task-123/"', response.content.decode())
+        self.assertIn('Syncing with Garmin', response.content.decode())
+
 class SyncTaskTests(TestCase):
     @patch('dashboard.tasks.subprocess.run')
     @patch('dashboard.tasks.sqlite3.connect')
@@ -76,3 +89,18 @@ class SyncTaskTests(TestCase):
 
             mock_print.assert_any_call("Garmin credentials missing in .env")
             mock_makedirs.assert_not_called()
+    @patch('dashboard.tasks.subprocess.run')
+    def test_sync_garmin_data_handles_subprocess_error(self, mock_subprocess):
+        import subprocess
+        # Setup mock to raise CalledProcessError
+        mock_subprocess.side_effect = subprocess.CalledProcessError(
+            returncode=1,
+            cmd=['garmindb_cli.py']
+        )
+
+        with patch.dict('os.environ', {'GARMIN_USERNAME': 'test', 'GARMIN_PASSWORD': 'test'}):
+            # This should catch the exception and return gracefully without crashing
+            sync_garmin_data()
+
+            # Verify the mock was actually called
+            mock_subprocess.assert_called_once()

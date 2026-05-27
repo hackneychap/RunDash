@@ -10,9 +10,17 @@ from .tasks import sync_garmin_data
 def dashboard(request):
     runs = RunActivity.objects.all().order_by('date')
     
-    total_km = runs.aggregate(Sum('distance_km'))['distance_km__sum'] or 0
-    total_duration = runs.aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
-    avg_tss = runs.aggregate(Avg('tss'))['tss__avg'] or 0
+    # ⚡ Bolt Optimization: Combine 3 separate aggregates into a single DB query
+    # Reduces N+1 query pattern on the dashboard load
+    aggregates = runs.aggregate(
+        total_km=Sum('distance_km'),
+        total_duration=Sum('duration_minutes'),
+        avg_tss=Avg('tss')
+    )
+
+    total_km = aggregates['total_km'] or 0
+    total_duration = aggregates['total_duration'] or 0
+    avg_tss = aggregates['avg_tss'] or 0
     
     weekly_stats = runs.annotate(week=TruncWeek('date')).values('week').annotate(
         total_km=Sum('distance_km'),
@@ -27,13 +35,17 @@ def dashboard(request):
         total_tss=Sum('tss')
     ).order_by('month')
     
-    weekly_labels = [stat['week'].strftime('%Y-%m-%d') if stat['week'] else '' for stat in weekly_stats]
-    weekly_km = [round(stat['total_km'], 1) if stat['total_km'] else 0 for stat in weekly_stats]
-    weekly_tss = [round(stat['total_tss'], 1) if stat['total_tss'] else 0 for stat in weekly_stats]
-    weekly_elevation = [round(stat['total_elevation'], 1) if stat['total_elevation'] else 0 for stat in weekly_stats]
-    
-    monthly_labels = [stat['month'].strftime('%Y-%m') if stat['month'] else '' for stat in monthly_stats]
-    monthly_km = [round(stat['total_km'], 1) if stat['total_km'] else 0 for stat in monthly_stats]
+    weekly_labels, weekly_km, weekly_tss, weekly_elevation = [], [], [], []
+    for stat in weekly_stats:
+        weekly_labels.append(stat['week'].strftime('%Y-%m-%d') if stat['week'] else '')
+        weekly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
+        weekly_tss.append(round(stat['total_tss'], 1) if stat['total_tss'] else 0)
+        weekly_elevation.append(round(stat['total_elevation'], 1) if stat['total_elevation'] else 0)
+
+    monthly_labels, monthly_km = [], []
+    for stat in monthly_stats:
+        monthly_labels.append(stat['month'].strftime('%Y-%m') if stat['month'] else '')
+        monthly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
     
     context = {
         'total_km': round(total_km, 2),

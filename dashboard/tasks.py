@@ -122,6 +122,8 @@ def sync_garmin_data():
         runs = cursor.fetchall()
         two_years_ago_date = (datetime.datetime.now() - datetime.timedelta(days=2*365)).date()
 
+        parsed_runs = []
+        activity_ids = []
         for run in runs:
             try:
                 # GarminDB stores start_time as string like '2023-10-25 08:30:00' or similar
@@ -149,19 +151,51 @@ def sync_garmin_data():
                 tss = float(run['tss']) if run['tss'] is not None else None
                 elevation_gain = float(run['ascent']) if 'ascent' in run.keys() and run['ascent'] is not None else None
 
-                RunActivity.objects.update_or_create(
-                    activity_id=activity_id,
-                    defaults={
-                        'date': run_date,
-                        'distance_km': distance_km,
-                        'duration_minutes': duration_minutes,
-                        'tss': tss,
-                        'elevation_gain': elevation_gain
-                    }
-                )
+                parsed_runs.append({
+                    'activity_id': activity_id,
+                    'date': run_date,
+                    'distance_km': distance_km,
+                    'duration_minutes': duration_minutes,
+                    'tss': tss,
+                    'elevation_gain': elevation_gain
+                })
+                activity_ids.append(activity_id)
+
             except Exception as e:
                 print(f"Error processing run {run['activity_id']}: {e}")
                 continue
+
+        # Fetch existing records
+        existing_activities = {
+            activity.activity_id: activity
+            for activity in RunActivity.objects.filter(activity_id__in=activity_ids)
+        }
+
+        create_list = []
+        update_list = []
+
+        for run_data in parsed_runs:
+            activity_id = run_data['activity_id']
+            if activity_id in existing_activities:
+                # Update existing instance
+                instance = existing_activities[activity_id]
+                changed = False
+                for field in ['date', 'distance_km', 'duration_minutes', 'tss', 'elevation_gain']:
+                    if getattr(instance, field) != run_data[field]:
+                        setattr(instance, field, run_data[field])
+                        changed = True
+
+                if changed:
+                    update_list.append(instance)
+            else:
+                # Create new instance
+                create_list.append(RunActivity(**run_data))
+
+        if create_list:
+            RunActivity.objects.bulk_create(create_list, batch_size=500)
+        if update_list:
+            # batch_size optimization
+            RunActivity.objects.bulk_update(update_list, fields=['date', 'distance_km', 'duration_minutes', 'tss', 'elevation_gain'], batch_size=500)
 
     except sqlite3.OperationalError as e:
         print(f"Error querying garmin.db: {e}")
