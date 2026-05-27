@@ -33,6 +33,19 @@ class DashboardViewTests(TestCase):
 from unittest.mock import patch, MagicMock
 from .tasks import sync_garmin_data
 
+class TriggerSyncViewTests(TestCase):
+    @patch('dashboard.views.async_task')
+    def test_trigger_sync_view(self, mock_async_task):
+        mock_async_task.return_value = 'mock-task-123'
+
+        response = self.client.get('/trigger-sync/')
+
+        self.assertEqual(response.status_code, 200)
+        mock_async_task.assert_called_once_with(sync_garmin_data)
+
+        self.assertIn('hx-get="/sync-status/mock-task-123/"', response.content.decode())
+        self.assertIn('Syncing with Garmin', response.content.decode())
+
 class SyncTaskTests(TestCase):
     @patch('dashboard.tasks.subprocess.run')
     @patch('dashboard.tasks.sqlite3.connect')
