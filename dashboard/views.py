@@ -10,9 +10,17 @@ from .tasks import sync_garmin_data
 def dashboard(request):
     runs = RunActivity.objects.all().order_by('date')
     
-    total_km = runs.aggregate(Sum('distance_km'))['distance_km__sum'] or 0
-    total_duration = runs.aggregate(Sum('duration_minutes'))['duration_minutes__sum'] or 0
-    avg_tss = runs.aggregate(Avg('tss'))['tss__avg'] or 0
+    # ⚡ Bolt Optimization: Combine 3 separate aggregates into a single DB query
+    # Reduces N+1 query pattern on the dashboard load
+    aggregates = runs.aggregate(
+        total_km=Sum('distance_km'),
+        total_duration=Sum('duration_minutes'),
+        avg_tss=Avg('tss')
+    )
+
+    total_km = aggregates['total_km'] or 0
+    total_duration = aggregates['total_duration'] or 0
+    avg_tss = aggregates['avg_tss'] or 0
     
     weekly_stats = runs.annotate(week=TruncWeek('date')).values('week').annotate(
         total_km=Sum('distance_km'),
