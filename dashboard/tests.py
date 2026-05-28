@@ -1,5 +1,6 @@
 from django.test import TestCase
 import datetime
+import os
 from .models import RunActivity
 
 class RunActivityModelTests(TestCase):
@@ -66,15 +67,22 @@ class SyncTaskTests(TestCase):
             mock_row = {
                 'activity_id': '12345',
                 'start_time': recent_date.strftime('%Y-%m-%d %H:%M:%S'),
-                'distance': 5000,
-                'elapsed_time': 1800,
-                'tss': 45.0,
+                'distance': 5.0,
+                'elapsed_time': '00:30:00',
+                'moving_time': '00:30:00',
+                'avg_speed': 10.0,
+                'avg_hr': 150,
                 'ascent': 120.5
             }
             mock_cursor.fetchall.return_value = [mock_row]
 
-            # Mock os.path.exists for db file
-            with patch('os.path.exists', return_value=True):
+            # Mock os.path.exists selectively for db file
+            orig_exists = os.path.exists
+            def side_effect(path):
+                if 'garmin.db' in str(path):
+                    return True
+                return orig_exists(path)
+            with patch('os.path.exists', side_effect=side_effect):
                 sync_garmin_data()
 
             # Verify data was imported
