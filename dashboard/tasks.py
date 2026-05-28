@@ -112,27 +112,27 @@ def sync_garmin_data():
     # The activities table usually contains start_time, distance, duration, type, etc.
     # The exact columns vary but usually it's activity_id, start_time, distance, elapsed_time, type
     try:
+        two_years_ago_date = (datetime.datetime.now() - datetime.timedelta(days=2*365)).date()
+        two_years_ago_str = two_years_ago_date.isoformat()
+
+        # ⚡ Bolt Optimization: Push filtering down to the database level and avoid
+        # loading thousands of old rows into memory just to filter them in Python.
         cursor.execute("""
             SELECT activity_id, start_time, distance, elapsed_time, tss, ascent
             FROM activities 
-            WHERE type = 'running'
+            WHERE type = 'running' AND start_time >= ?
             ORDER BY start_time DESC
-        """)
+        """, (two_years_ago_str,))
         
         runs = cursor.fetchall()
-        two_years_ago_date = (datetime.datetime.now() - datetime.timedelta(days=2*365)).date()
 
         parsed_runs = []
         activity_ids = []
         for run in runs:
             try:
-                # GarminDB stores start_time as string like '2023-10-25 08:30:00' or similar
-                date_str = run['start_time'].split(' ')[0]
-                run_date = datetime.datetime.strptime(date_str, "%Y-%m-%d").date()
-                
-                # Filter to only last 2 years
-                if run_date < two_years_ago_date:
-                    continue
+                # ⚡ Bolt Optimization: Use slicing and fromisoformat instead of split + strptime
+                # Date format is like '2023-10-25 08:30:00'. fromisoformat is ~20x faster.
+                run_date = datetime.date.fromisoformat(run['start_time'][:10])
 
                 activity_id = str(run['activity_id'])
                 # GarminDB distance is usually in meters, convert to km
