@@ -6,17 +6,7 @@ import datetime
 from django.conf import settings
 from .models import RunActivity
 
-def sync_garmin_data():
-    """
-    Background task to run GarminDB sync and import the data into Django.
-    """
-    garmin_user = os.environ.get("GARMIN_USERNAME")
-    garmin_pass = os.environ.get("GARMIN_PASSWORD")
-
-    if not garmin_user or not garmin_pass:
-        print("Garmin credentials missing in .env")
-        return
-
+def _setup_config(garmin_user, garmin_pass):
     # Setup GarminDB config
     garmin_db_dir = os.path.expanduser("~/.GarminDb")
     os.makedirs(garmin_db_dir, exist_ok=True)
@@ -72,6 +62,8 @@ def sync_garmin_data():
     with open(config_path, "w") as f:
         json.dump(config, f, indent=4)
 
+
+def _run_sync():
     # Run GarminDB sync
     print("Running GarminDB sync...")
     
@@ -95,10 +87,13 @@ def sync_garmin_data():
     try:
         # Run process (this may take a long time)
         subprocess.run(cmd, check=True, cwd=settings.BASE_DIR)
+        return sqlite_db_path
     except subprocess.CalledProcessError as e:
         print(f"Error running GarminDB: {e}")
-        return
+        return None
 
+
+def _import_data(sqlite_db_path):
     # Now read the garmin.db SQLite file and insert into Django
     print("Importing to Django models...")
     if not os.path.exists(sqlite_db_path):
@@ -202,5 +197,22 @@ def sync_garmin_data():
     finally:
         conn.close()
 
-    print("Sync complete.")
 
+def sync_garmin_data():
+    """
+    Background task to run GarminDB sync and import the data into Django.
+    """
+    garmin_user = os.environ.get("GARMIN_USERNAME")
+    garmin_pass = os.environ.get("GARMIN_PASSWORD")
+
+    if not garmin_user or not garmin_pass:
+        print("Garmin credentials missing in .env")
+        return
+
+    _setup_config(garmin_user, garmin_pass)
+
+    sqlite_db_path = _run_sync()
+    if sqlite_db_path:
+        _import_data(sqlite_db_path)
+
+    print("Sync complete.")
