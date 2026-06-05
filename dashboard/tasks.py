@@ -271,6 +271,11 @@ def finalize_garmin_import():
     try:
         _import_data(sqlite_db_path)
         print("Import completed successfully.")
+
+        # ⚡ Bolt Optimization: Invalidate dashboard cache after new data is imported
+        # Ensures users immediately see the new data instead of a stale cached view.
+        from django.core.cache import cache
+        cache.delete('dashboard_context')
     except Exception as e:
         print(f"Error during Django DB import: {e}")
         _write_lock_status({"status": "failed", "error": f"Finalization failed: {e}"})
