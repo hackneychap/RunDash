@@ -1,3 +1,6 @@
 ## 2025-02-18 - [SQLite Query Optimization for Garmin Data Sync]
 **Learning:** The application syncs run activities from a local GarminDB SQLite database, which previously transferred thousands of old records into Python memory only to discard them based on a 2-year cutoff. Furthermore, date parsing using `strptime` is significantly slower compared to `fromisoformat`.
 **Action:** When querying large local SQLite databases (like GarminDB), push down WHERE clauses to filter large datasets at the database level instead of in-memory. For date string parsing, use string slicing and `datetime.date.fromisoformat` over `datetime.datetime.strptime` where the string format allows (e.g., extracting "YYYY-MM-DD" from "YYYY-MM-DD HH:MM:SS").
+## 2025-02-18 - [Django Dashboard Aggregation Caching]
+**Learning:** The dashboard view performs multiple heavy database aggregations (`Sum`, `Avg`, `TruncWeek`, `TruncMonth`) across the entire `RunActivity` table on every page load.
+**Action:** Cache the resulting `context` dictionary using `django.core.cache.cache.set()` with `timeout=None`, and explicitly invalidate the cache using `cache.delete('dashboard_context')` when new data is imported via sync tasks or when `RunActivity` instances are modified/deleted via Django signals.
