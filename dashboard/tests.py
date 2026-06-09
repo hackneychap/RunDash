@@ -79,7 +79,7 @@ class SyncTaskTests(TestCase):
             # Mock os.path.exists selectively for db file
             orig_exists = os.path.exists
             def side_effect(path):
-                if 'garmin.db' in str(path):
+                if 'garmin.db' in str(path) or 'garmin_activities.db' in str(path):
                     return True
                 return orig_exists(path)
             with patch('os.path.exists', side_effect=side_effect):
