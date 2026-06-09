@@ -7,6 +7,7 @@ import shutil
 import glob
 import sys
 from django.conf import settings
+from django.core.cache import cache
 from django_q.tasks import async_task
 from .models import RunActivity
 
@@ -271,6 +272,10 @@ def finalize_garmin_import():
     try:
         _import_data(sqlite_db_path)
         print("Import completed successfully.")
+
+        # Explicitly invalidate cache since bulk_create/bulk_update bypass signals
+        cache.delete('dashboard_context')
+
     except Exception as e:
         print(f"Error during Django DB import: {e}")
         _write_lock_status({"status": "failed", "error": f"Finalization failed: {e}"})
