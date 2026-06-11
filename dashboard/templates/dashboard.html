@@ -17,6 +17,76 @@
     </div>
 </div>
 
+<!-- This Week vs Last Week -->
+<h2 class="text-lg font-semibold text-base-content/80 mb-4">This Week vs Last Week</h2>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+    <!-- Distance — blue (matches Total Distance) -->
+    <div class="card bg-base-100 shadow-lg border-l-4 border-l-blue-500 p-4">
+        <div class="text-sm font-medium text-blue-500 mb-1">Distance</div>
+        <div class="flex items-baseline gap-2 mb-1">
+            <span class="text-2xl font-bold">{{ tw_dist }}<span class="text-sm font-normal ml-1">km</span></span>
+        </div>
+        <div class="text-xs text-base-content/50">
+            Last week: {{ lw_dist }} km &middot;
+            {% if pct_dist is not None %}
+                {% if pct_dist > 0 %}+{% endif %}{{ pct_dist }}%
+            {% else %}
+                N/A
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Elevation — amber (matches Elevation chart) -->
+    <div class="card bg-base-100 shadow-lg border-l-4 border-l-amber-500 p-4">
+        <div class="text-sm font-medium text-amber-500 mb-1">Elevation</div>
+        <div class="flex items-baseline gap-2 mb-1">
+            <span class="text-2xl font-bold">{{ tw_elev }}<span class="text-sm font-normal ml-1">m</span></span>
+        </div>
+        <div class="text-xs text-base-content/50">
+            Last week: {{ lw_elev }} m &middot;
+            {% if pct_elev is not None %}
+                {% if pct_elev > 0 %}+{% endif %}{{ pct_elev }}%
+            {% else %}
+                N/A
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Duration — emerald (matches Total Duration) -->
+    <div class="card bg-base-100 shadow-lg border-l-4 border-l-emerald-500 p-4">
+        <div class="text-sm font-medium text-emerald-500 mb-1">Duration</div>
+        <div class="flex items-baseline gap-2 mb-1">
+            <span class="text-2xl font-bold">{{ tw_dur }}<span class="text-sm font-normal ml-1">hrs</span></span>
+        </div>
+        <div class="text-xs text-base-content/50">
+            Last week: {{ lw_dur }} hrs &middot;
+            {% if pct_dur is not None %}
+                {% if pct_dur > 0 %}+{% endif %}{{ pct_dur }}%
+            {% else %}
+                N/A
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- TSS — purple (matches Avg TSS) -->
+    <div class="card bg-base-100 shadow-lg border-l-4 border-l-purple-500 p-4">
+        <div class="text-sm font-medium text-purple-500 mb-1">TSS</div>
+        <div class="flex items-baseline gap-2 mb-1">
+            <span class="text-2xl font-bold">{{ tw_tss }}</span>
+        </div>
+        <div class="text-xs text-base-content/50">
+            Last week: {{ lw_tss }} &middot;
+            {% if pct_tss is not None %}
+                {% if pct_tss > 0 %}+{% endif %}{{ pct_tss }}%
+            {% else %}
+                N/A
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- All Time Totals -->
+<h2 class="text-lg font-semibold text-base-content/80 mb-4">All Time Totals</h2>
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
     <div class="stat bg-base-100 rounded-2xl shadow-xl border border-white/5 relative overflow-hidden group">
         <div class="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
@@ -26,7 +96,7 @@
         <div class="stat-title font-medium">Total Distance</div>
         <div class="stat-value text-blue-500">{{ total_km }} <span class="text-xl font-normal">km</span></div>
     </div>
-    
+
     <div class="stat bg-base-100 rounded-2xl shadow-xl border border-white/5 relative overflow-hidden group">
         <div class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
         <div class="stat-figure text-emerald-500">
@@ -35,7 +105,7 @@
         <div class="stat-title font-medium">Total Duration</div>
         <div class="stat-value text-emerald-500">{{ total_duration }} <span class="text-xl font-normal">hrs</span></div>
     </div>
-    
+
     <div class="stat bg-base-100 rounded-2xl shadow-xl border border-white/5 relative overflow-hidden group">
         <div class="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
         <div class="stat-figure text-purple-500">
@@ -46,34 +116,45 @@
     </div>
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+<!-- Weekly Charts -->
+<h2 class="text-lg font-semibold text-base-content/80 mb-4">Weekly Trends</h2>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
     <div class="card bg-base-100 shadow-xl border border-white/5">
         <div class="card-body">
-            <h2 class="card-title text-xl mb-4">Weekly Distance (km)</h2>
+            <h2 class="card-title text-xl mb-4">Distance (km)</h2>
             <canvas id="weeklyChart"></canvas>
         </div>
     </div>
-    
+
     <div class="card bg-base-100 shadow-xl border border-white/5">
         <div class="card-body">
-            <h2 class="card-title text-xl mb-4">Monthly Distance (km)</h2>
-            <canvas id="monthlyChart"></canvas>
+            <h2 class="card-title text-xl mb-4">Duration (hrs)</h2>
+            <canvas id="durationChart"></canvas>
         </div>
     </div>
-</div>
 
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
     <div class="card bg-base-100 shadow-xl border border-white/5">
         <div class="card-body">
-            <h2 class="card-title text-xl mb-4">Weekly Training Stress Score (TSS)</h2>
+            <h2 class="card-title text-xl mb-4">Training Stress Score (TSS)</h2>
             <canvas id="tssChart"></canvas>
         </div>
     </div>
 
     <div class="card bg-base-100 shadow-xl border border-white/5">
         <div class="card-body">
-            <h2 class="card-title text-xl mb-4">Weekly Elevation Gain (m)</h2>
+            <h2 class="card-title text-xl mb-4">Elevation Gain (m)</h2>
             <canvas id="elevationChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Monthly Charts -->
+<h2 class="text-lg font-semibold text-base-content/80 mb-4">Monthly Trends</h2>
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Monthly Distance (km)</h2>
+            <canvas id="monthlyChart"></canvas>
         </div>
     </div>
 </div>
@@ -96,6 +177,34 @@
                 borderColor: 'rgba(59, 130, 246, 1)',
                 borderWidth: 1,
                 borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // Duration Chart
+    const ctxDuration = document.getElementById('durationChart').getContext('2d');
+    new Chart(ctxDuration, {
+        type: 'line',
+        data: {
+            labels: {{ weekly_labels|safe }},
+            datasets: [{
+                label: 'Duration (hrs)',
+                data: {{ weekly_duration|safe }},
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                borderColor: 'rgba(16, 185, 129, 1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true
             }]
         },
         options: {

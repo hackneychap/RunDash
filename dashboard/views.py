@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from datetime import date, datetime, timedelta
 from django.shortcuts import render
 from django.db.models import Sum, Avg
 from django.db.models.functions import TruncWeek, TruncMonth
@@ -41,18 +42,49 @@ def dashboard(request):
         total_tss=Sum('tss')
     ).order_by('month')
     
-    weekly_labels, weekly_km, weekly_tss, weekly_elevation = [], [], [], []
+    weekly_labels, weekly_km, weekly_tss, weekly_elevation, weekly_duration = [], [], [], [], []
     for stat in weekly_stats:
         weekly_labels.append(stat['week'].strftime('%Y-%m-%d') if stat['week'] else '')
         weekly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
         weekly_tss.append(round(stat['total_tss'], 1) if stat['total_tss'] else 0)
         weekly_elevation.append(round(stat['total_elevation'], 1) if stat['total_elevation'] else 0)
+        weekly_duration.append(round((stat['total_duration'] or 0) / 60, 1))
 
     monthly_labels, monthly_km = [], []
     for stat in monthly_stats:
         monthly_labels.append(stat['month'].strftime('%Y-%m') if stat['month'] else '')
         monthly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
     
+    # Week-vs-week comparison (proportional: same days into the week)
+    today = date.today()
+    this_week_start = today - timedelta(days=today.weekday())  # Most recent Monday
+    last_week_start = this_week_start - timedelta(days=7)
+    last_week_same_point = last_week_start + (today - this_week_start)
+
+    this_week_qs = RunActivity.objects.filter(date__gte=this_week_start, date__lte=today)
+    last_week_qs = RunActivity.objects.filter(date__gte=last_week_start, date__lte=last_week_same_point)
+
+    tw_agg = this_week_qs.aggregate(
+        d=Sum('distance_km'), e=Sum('elevation_gain'),
+        dur=Sum('duration_minutes'), t=Sum('tss'))
+    lw_agg = last_week_qs.aggregate(
+        d=Sum('distance_km'), e=Sum('elevation_gain'),
+        dur=Sum('duration_minutes'), t=Sum('tss'))
+
+    tw_dist = round(tw_agg['d'] or 0, 1)
+    lw_dist = round(lw_agg['d'] or 0, 1)
+    tw_elev = round(tw_agg['e'] or 0, 1)
+    lw_elev = round(lw_agg['e'] or 0, 1)
+    tw_dur  = round((tw_agg['dur'] or 0) / 60, 1)
+    lw_dur  = round((lw_agg['dur'] or 0) / 60, 1)
+    tw_tss  = round(tw_agg['t'] or 0, 1)
+    lw_tss  = round(lw_agg['t'] or 0, 1)
+
+    def pct(this, last):
+        if last == 0:
+            return None
+        return round(((this - last) / last) * 100, 1)
+
     context = {
         'total_km': round(total_km, 2),
         'total_duration': round(total_duration / 60, 1), # Hours
@@ -61,8 +93,14 @@ def dashboard(request):
         'weekly_km': json.dumps(weekly_km),
         'weekly_tss': json.dumps(weekly_tss),
         'weekly_elevation': json.dumps(weekly_elevation),
+        'weekly_duration': json.dumps(weekly_duration),
         'monthly_labels': json.dumps(monthly_labels),
         'monthly_km': json.dumps(monthly_km),
+        # Week-vs-week comparison cards
+        'tw_dist': tw_dist, 'lw_dist': lw_dist, 'pct_dist': pct(tw_dist, lw_dist),
+        'tw_elev': tw_elev, 'lw_elev': lw_elev, 'pct_elev': pct(tw_elev, lw_elev),
+        'tw_dur': tw_dur, 'lw_dur': lw_dur, 'pct_dur': pct(tw_dur, lw_dur),
+        'tw_tss': tw_tss, 'lw_tss': lw_tss, 'pct_tss': pct(tw_tss, lw_tss),
     }
     return render(request, 'dashboard.html', context)
 
