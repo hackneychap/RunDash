@@ -22,11 +22,13 @@ def dashboard(request):
     aggregates = runs.aggregate(
         total_km=Sum('distance_km'),
         total_duration=Sum('duration_minutes'),
+        total_elevation=Sum('elevation_gain'),
         avg_tss=Avg('tss')
     )
 
     total_km = aggregates['total_km'] or 0
     total_duration = aggregates['total_duration'] or 0
+    total_elevation = aggregates['total_elevation'] or 0
     avg_tss = aggregates['avg_tss'] or 0
     
     weekly_stats = runs.annotate(week=TruncWeek('date')).values('week').annotate(
@@ -88,6 +90,7 @@ def dashboard(request):
     context = {
         'total_km': round(total_km, 2),
         'total_duration': round(total_duration / 60, 1), # Hours
+        'total_elevation': round(total_elevation, 1),
         'avg_tss': round(avg_tss, 1),
         'weekly_labels': json.dumps(weekly_labels),
         'weekly_km': json.dumps(weekly_km),
