@@ -1,0 +1,241 @@
+{% extends 'base.html' %}
+{% block content %}
+
+<!-- Block Header -->
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+    <div>
+        <h1 class="text-4xl font-extrabold tracking-tight">{{ training_block.name }}</h1>
+        <p class="text-base-content/70 mt-2">
+            {{ training_block.start_date|date:"M d, Y" }} — {{ training_block.end_date|date:"M d, Y" }}
+            {% if is_active %}
+                <span class="badge badge-success ml-2">Active</span>
+            {% endif %}
+        </p>
+    </div>
+    <a href="{% url 'dashboard' %}" class="btn btn-ghost">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Back to Dashboard
+    </a>
+</div>
+
+<!-- A Race Info Card -->
+<div class="card bg-base-100 shadow-xl border border-white/5 mb-8">
+    <div class="card-body">
+        <h2 class="card-title text-xl mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+            </svg>
+            A Race: {{ a_race.name }}
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="stat-title">Date</div>
+                <div class="stat-value text-lg">{{ a_race.date|date:"M d, Y" }}</div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="stat-title">Goal Time</div>
+                <div class="stat-value text-lg">{% if a_race.goal_time %}{{ a_race.goal_time }}{% else %}<span class="text-base-content/50">Not set</span>{% endif %}</div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="stat-title">Days to Race</div>
+                <div class="stat-value text-lg">
+                    {% if days_to_race > 0 %}{{ days_to_race }}{% elif days_to_race == 0 %}<span class="text-success">Race Day!</span>{% else %}<span class="text-base-content/50">{{ days_to_race|add:"0"|floatformat:0 }} days ago</span>{% endif %}
+                </div>
+            </div>
+            <div class="stat bg-base-200 rounded-xl p-4">
+                <div class="stat-title">Feeling</div>
+                <div class="stat-value text-lg">{% if a_race.feeling %}{{ a_race.feeling }}{% else %}<span class="text-base-content/50">Not recorded</span>{% endif %}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Section Timeline -->
+<div class="card bg-base-100 shadow-xl border border-white/5 mb-8">
+    <div class="card-body">
+        <h2 class="card-title text-xl mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-info" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Training Sections
+        </h2>
+        <div class="flex flex-wrap gap-2">
+            {% for section in sections %}
+                <div class="badge badge-lg 
+                    {% if section.name == 'Base' %}badge-info
+                    {% elif section.name == 'Race Specific' %}badge-warning
+                    {% elif section.name == 'Taper' %}badge-success
+                    {% else %}badge-primary{% endif %} p-3">
+                    <span class="font-bold">{{ section.name }}</span>
+                    <span class="ml-2 opacity-75">{{ section.start_date|date:"M d" }} — {{ section.end_date|date:"M d" }}</span>
+                </div>
+            {% empty %}
+                <span class="text-base-content/50">No sections defined</span>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- B Races -->
+{% if b_races %}
+<div class="card bg-base-100 shadow-xl border border-white/5 mb-8">
+    <div class="card-body">
+        <h2 class="card-title text-xl mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+            B Races
+        </h2>
+        <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Date</th>
+                        <th>Distance</th>
+                        <th>Feeling</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for race in b_races %}
+                    <tr>
+                        <td class="font-medium">{{ race.name }}</td>
+                        <td>{{ race.date|date:"M d, Y" }}</td>
+                        <td>{{ race.distance_km }} km</td>
+                        <td>{% if race.feeling %}{{ race.feeling }}{% else %}<span class="text-base-content/50">—</span>{% endif %}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Weekly Stats -->
+<div class="card bg-base-100 shadow-xl border border-white/5 mb-8">
+    <div class="card-body">
+        <h2 class="card-title text-xl mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Weekly Stats
+        </h2>
+        <div class="overflow-x-auto">
+            <table class="table table-zebra w-full">
+                <thead>
+                    <tr>
+                        <th>Week</th>
+                        <th>Runs</th>
+                        <th>Distance (km)</th>
+                        <th>Duration (hrs)</th>
+                        <th>Elevation (m)</th>
+                        <th>TSS</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stat in weekly_stats %}
+                    <tr class="{% if is_active and stat.week_number == current_week %}bg-primary/10{% endif %}">
+                        <td class="font-bold">
+                            Week {{ stat.week_number }}
+                            {% if is_active and stat.week_number == current_week %}
+                                <span class="badge badge-primary badge-sm ml-1">Current</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ stat.run_count }}</td>
+                        <td>{{ stat.distance }}</td>
+                        <td>{{ stat.duration }}</td>
+                        <td>{{ stat.elevation|floatformat:0 }}</td>
+                        <td>{{ stat.tss }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center text-base-content/50">No activities recorded</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+{% if chart_labels %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Weekly Distance (km)</h2>
+            <canvas id="blockDistanceChart"></canvas>
+        </div>
+    </div>
+
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Weekly TSS</h2>
+            <canvas id="blockTssChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+    // Theme defaults for Chart.js
+    Chart.defaults.color = '#9ca3af';
+    Chart.defaults.font.family = "'Inter', sans-serif";
+
+    {% if chart_labels %}
+    // Distance Chart
+    const ctxDistance = document.getElementById('blockDistanceChart').getContext('2d');
+    new Chart(ctxDistance, {
+        type: 'bar',
+        data: {
+            labels: {{ chart_labels|safe }},
+            datasets: [{
+                label: 'Distance (km)',
+                data: {{ chart_distance|safe }},
+                backgroundColor: 'rgba(59, 130, 246, 0.5)',
+                borderColor: 'rgba(59, 130, 246, 1)',
+                borderWidth: 1,
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+
+    // TSS Chart
+    const ctxTss = document.getElementById('blockTssChart').getContext('2d');
+    new Chart(ctxTss, {
+        type: 'line',
+        data: {
+            labels: {{ chart_labels|safe }},
+            datasets: [{
+                label: 'TSS',
+                data: {{ chart_tss|safe }},
+                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                borderColor: 'rgba(168, 85, 247, 1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.05)' } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+    {% endif %}
+</script>
+{% endblock %}
