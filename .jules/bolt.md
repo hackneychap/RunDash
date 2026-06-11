@@ -1,3 +1,6 @@
 ## 2025-02-18 - [SQLite Query Optimization for Garmin Data Sync]
 **Learning:** The application syncs run activities from a local GarminDB SQLite database, which previously transferred thousands of old records into Python memory only to discard them based on a 2-year cutoff. Furthermore, date parsing using `strptime` is significantly slower compared to `fromisoformat`.
 **Action:** When querying large local SQLite databases (like GarminDB), push down WHERE clauses to filter large datasets at the database level instead of in-memory. For date string parsing, use string slicing and `datetime.date.fromisoformat` over `datetime.datetime.strptime` where the string format allows (e.g., extracting "YYYY-MM-DD" from "YYYY-MM-DD HH:MM:SS").
+## 2025-02-18 - [Django Bulk Operations and Cache Invalidation]
+**Learning:** Django's `bulk_create` and `bulk_update` methods bypass standard `post_save` and `post_delete` signals. If you implement model-level caching relying on these signals for invalidation, data mutated through bulk operations will result in stale cache data.
+**Action:** When implementing model-level cache invalidation via signals, always explicitly check for and handle cache invalidation wherever bulk operations are used.

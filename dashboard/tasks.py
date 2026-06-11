@@ -404,6 +404,12 @@ def _import_data(sqlite_db_path):
         if update_list:
             RunActivity.objects.bulk_update(update_list, fields=['date', 'distance_km', 'duration_minutes', 'tss', 'elevation_gain'], batch_size=500)
 
+        # ⚡ Bolt Optimization: Cache invalidation
+        # Bulk operations bypass signals, so we must invalidate the cache explicitly
+        if create_list or update_list:
+            from django.core.cache import cache
+            cache.delete('dashboard_context')
+
     except sqlite3.OperationalError as e:
         print(f"Error querying garmin_activities.db: {e}")
     finally:
