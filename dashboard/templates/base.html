@@ -50,7 +50,7 @@
             <div class="flex-none">
                 <ul class="menu menu-horizontal px-1 gap-1">
                     <li><a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Dashboard</a></li>
-                    <li><a href="{% url 'blocks_list' %}" class="{% if 'blocks' in request.resolver_match.url_name %}active{% endif %}">Training Blocks</a></li>
+                    <li><a href="{% url 'blocks_list' %}" class="{% if request.resolver_match.url_name in 'blocks_list,block_detail,block_create' %}active{% endif %}">Training Blocks</a></li>
                     <li><a href="{% url 'block_compare' %}" class="{% if request.resolver_match.url_name == 'block_compare' %}active{% endif %}">Compare</a></li>
                 </ul>
             </div>

@@ -27,6 +27,15 @@ class TrainingBlockForm(forms.ModelForm):
             'end_date': forms.DateInput(attrs={'type': 'date', 'class': 'input input-bordered w-full'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # All three fields are optional — the view's auto-fill handles blanks.
+        # Model defaults CharField/DateField to blank=False which ModelForm inherits;
+        # we override here so the helper text "Leave blank for ..." is honoured.
+        self.fields['name'].required = False
+        self.fields['start_date'].required = False
+        self.fields['end_date'].required = False
+
     def clean(self):
         cleaned_data = super().clean()
         start = cleaned_data.get('start_date')
