@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="mb-6">
+        <a href="{% url 'blocks_list' %}" class="btn btn-ghost btn-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Training Blocks
+        </a>
+    </div>
+
+    <h1 class="text-3xl font-bold mb-2">New Training Block</h1>
+    <p class="text-base-content/70 mb-6">Create an A Race and its training block in one go. Leave dates blank to auto-fill a 16-week block ending on race day.</p>
+
+    <form method="post" class="space-y-6">
+        {% csrf_token %}
+
+        <div class="card bg-base-100 shadow-xl border border-white/5">
+            <div class="card-body">
+                <h2 class="card-title text-xl mb-4">
+                    <span class="badge badge-primary">A Race</span>
+                    The race you're training for
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="label"><span class="label-text">Race name</span></label>
+                        {{ race_form.name }}
+                        {% if race_form.name.errors %}<p class="text-error text-sm mt-1">{{ race_form.name.errors.0 }}</p>{% endif %}
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="label"><span class="label-text">Race date</span></label>
+                            {{ race_form.date }}
+                            {% if race_form.date.errors %}<p class="text-error text-sm mt-1">{{ race_form.date.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label class="label"><span class="label-text">Goal time (optional)</span></label>
+                            {{ race_form.goal_time }}
+                        </div>
+                    </div>
+                    <div>
+                        <label class="label"><span class="label-text">Notes (optional)</span></label>
+                        {{ race_form.notes }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card bg-base-100 shadow-xl border border-white/5">
+            <div class="card-body">
+                <h2 class="card-title text-xl mb-4">
+                    <span class="badge badge-accent">Training Block</span>
+                    When the prep starts and ends
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="label"><span class="label-text">Block name (optional)</span></label>
+                        {{ block_form.name }}
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="label"><span class="label-text">Start date</span></label>
+                            {{ block_form.start_date }}
+                            <p class="text-xs text-base-content/50 mt-1">Leave blank for 16 weeks before race</p>
+                            {% if block_form.start_date.errors %}<p class="text-error text-sm mt-1">{{ block_form.start_date.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <label class="label"><span class="label-text">End date</span></label>
+                            {{ block_form.end_date }}
+                            <p class="text-xs text-base-content/50 mt-1">Leave blank for race day</p>
+                            {% if block_form.end_date.errors %}<p class="text-error text-sm mt-1">{{ block_form.end_date.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3">
+            <a href="{% url 'blocks_list' %}" class="btn btn-ghost">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Training Block</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
