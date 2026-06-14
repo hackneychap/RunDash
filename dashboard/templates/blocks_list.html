@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+    <div>
+        <h1 class="text-4xl font-extrabold tracking-tight">Training Blocks</h1>
+        <p class="text-base-content/70 mt-2">All your structured training periods</p>
+    </div>
+    <a href="{% url 'dashboard' %}" class="btn btn-ghost">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        Dashboard
+    </a>
+</div>
+
+{% if not blocks %}
+<div class="card bg-base-100 shadow-xl border border-white/5">
+    <div class="card-body items-center text-center py-16">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-base-content/30 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+        <h2 class="card-title text-xl text-base-content/60">No Training Blocks Yet</h2>
+        <p class="text-base-content/40">Create your first training block via the <a href="/admin/" class="link link-primary">admin panel</a>.</p>
+    </div>
+</div>
+{% else %}
+
+<!-- Active Block -->
+{% for item in blocks %}
+{% if item.status == 'active' %}
+<div class="mb-8">
+    <h2 class="text-lg font-semibold text-base-content/80 mb-4 flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+        Active Block
+    </h2>
+    <div class="card bg-base-100 shadow-xl border-2 border-green-500/30 overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-green-500/5 to-transparent"></div>
+        <div class="card-body relative">
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex-1">
+                    <div class="flex items-center gap-3 mb-2">
+                        <h3 class="text-2xl font-bold">{{ item.block.name }}</h3>
+                        <span class="badge badge-success badge-lg">Active</span>
+                    </div>
+                    <p class="text-base-content/60 mb-1">
+                        <span class="font-semibold text-primary">{{ item.block.a_race.name }}</span>
+                        &mdash; {{ item.block.a_race.date|date:"d M Y" }}
+                    </p>
+                    <p class="text-sm text-base-content/40">
+                        {{ item.block.start_date|date:"d M" }} &ndash; {{ item.block.end_date|date:"d M Y" }}
+                        &middot; {{ item.duration_weeks }} weeks
+                    </p>
+                </div>
+                <div class="flex gap-6">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-500">{{ item.total_km }}</div>
+                        <div class="text-xs text-base-content/50 uppercase tracking-wider">km</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-emerald-500">{{ item.total_runs }}</div>
+                        <div class="text-xs text-base-content/50 uppercase tracking-wider">runs</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-purple-500">{{ item.b_races_count }}</div>
+                        <div class="text-xs text-base-content/50 uppercase tracking-wider">B races</div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-actions justify-end mt-4">
+                <a href="{% url 'block_detail' item.block.id %}" class="btn btn-primary btn-sm">
+                    View Details
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                    </svg>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<!-- Completed & Upcoming Blocks -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+{% for item in blocks %}
+{% if item.status != 'active' %}
+<a href="{% url 'block_detail' item.block.id %}" class="card bg-base-100 shadow-lg border border-white/5 hover:shadow-xl hover:border-white/10 transition-all duration-200 cursor-pointer group">
+    <div class="card-body p-5">
+        <div class="flex items-start justify-between mb-3">
+            <h3 class="card-title text-lg group-hover:text-primary transition-colors">{{ item.block.name }}</h3>
+            {% if item.status == 'completed' %}
+                <span class="badge badge-ghost badge-sm">Completed</span>
+            {% else %}
+                <span class="badge badge-info badge-sm">Upcoming</span>
+            {% endif %}
+        </div>
+        <p class="text-sm text-primary font-medium mb-1">{{ item.block.a_race.name }}</p>
+        <p class="text-xs text-base-content/50 mb-4">
+            {{ item.block.a_race.date|date:"d M Y" }}
+            &middot; {{ item.duration_weeks }} weeks
+        </p>
+        <div class="divider my-0"></div>
+        <div class="flex justify-between mt-3">
+            <div class="text-center flex-1">
+                <div class="text-lg font-bold text-blue-500">{{ item.total_km }}</div>
+                <div class="text-[10px] text-base-content/40 uppercase tracking-wider">km</div>
+            </div>
+            <div class="text-center flex-1">
+                <div class="text-lg font-bold text-emerald-500">{{ item.total_runs }}</div>
+                <div class="text-[10px] text-base-content/40 uppercase tracking-wider">runs</div>
+            </div>
+            <div class="text-center flex-1">
+                <div class="text-lg font-bold text-purple-500">{{ item.b_races_count }}</div>
+                <div class="text-[10px] text-base-content/40 uppercase tracking-wider">B races</div>
+            </div>
+        </div>
+    </div>
+</a>
+{% endif %}
+{% endfor %}
+</div>
+
+{% endif %}
+{% endblock %}
