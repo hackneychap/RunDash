@@ -1,20 +1,20 @@
 """
 Link RunActivity records to TrainingBlocks based on date overlap.
 
-For each run without a training_block, find a block whose date range
-encompasses the run date. If multiple blocks overlap, the one with the
-latest end_date wins (i.e. the most recent A race block).
+Idempotent: running multiple times is safe. Calls into the same
+`link_runs_to_block` helper used by the post_save signal, so the
+behaviour is identical.
 
-Also cleans up orphaned FKs (block deleted but FK not null — should be
-impossible with SET_NULL, but defensive).
-
-Idempotent: running multiple times is safe.
+Useful for:
+- One-off backfills (e.g. after data imports before the signal was added)
+- Recovery from manual DB edits
+- Verifying the linking state without creating/saving a block
 """
 
 from django.core.management.base import BaseCommand
-from django.db.models import Q
 
-from dashboard.models import RunActivity, TrainingBlock
+from dashboard.models import TrainingBlock
+from dashboard.signals import link_runs_to_block
 
 
 class Command(BaseCommand):
@@ -29,65 +29,14 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options["dry_run"]
-        verbosity = options["verbosity"]
 
-        linked = 0
-        unlinked = 0
+        total_linked = 0
+        for block in TrainingBlock.objects.all().order_by("start_date"):
+            linked, _unlinked = link_runs_to_block(block, dry_run=dry_run)
+            total_linked += linked
 
-        # --- Step 1: Clean orphaned FKs ---
-        # RunActivity.training_block has SET_NULL, so this should be a no-op,
-        # but we check defensively in case of manual DB edits.
-        orphans = RunActivity.objects.filter(
-            training_block__isnull=False,
-            training_block=None,
-        )
-        orphan_count = orphans.count()
-        if orphan_count:
-            if dry_run:
-                self.stdout.write(
-                    f"[dry-run] Would clear {orphan_count} orphaned training_block FK(s)"
-                )
-            else:
-                orphans.update(training_block=None)
-                unlinked = orphan_count
-                self.stdout.write(
-                    self.style.SUCCESS(f"Cleared {orphan_count} orphaned FK(s)")
-                )
-
-        # --- Step 2: Link unlinked runs ---
-        runs = RunActivity.objects.filter(training_block__isnull=True).order_by("date")
-
-        if not runs.exists():
-            self.stdout.write("No unlinked runs found.")
-        else:
-            for run in runs:
-                # Find all blocks whose date range covers this run.
-                # latest end_date wins (most recent A race).
-                blocks = TrainingBlock.objects.filter(
-                    start_date__lte=run.date,
-                    end_date__gte=run.date,
-                ).order_by("-end_date")
-
-                block = blocks.first()
-                if block:
-                    if dry_run:
-                        self.stdout.write(
-                            f"[dry-run] Would link run {run.activity_id} "
-                            f"(date={run.date}) -> block '{block.name}' "
-                            f"({block.start_date} to {block.end_date})"
-                        )
-                    else:
-                        run.training_block = block
-                        run.save(update_fields=["training_block"])
-                    linked += 1
-
-        # --- Summary ---
         action = "Would link" if dry_run else "Linked"
-        action2 = "would clear" if dry_run else "cleared"
-
         self.stdout.write("")
         self.stdout.write(
-            self.style.SUCCESS(
-                f"Done. {action} {linked} run(s), {action2} {unlinked} orphaned FK(s)."
-            )
+            self.style.SUCCESS(f"Done. {action} {total_linked} run(s) across all blocks.")
         )
