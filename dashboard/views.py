@@ -2,7 +2,7 @@ import json
 import os
 import time
 from datetime import date, datetime, timedelta
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.db.models import Sum, Avg, Count
 from django.db.models.functions import TruncWeek, TruncMonth
 from django.http import HttpResponse
@@ -388,6 +388,38 @@ def blocks_list(request):
         'today': today,
     }
     return render(request, 'blocks_list.html', context)
+
+
+def block_create(request):
+    """Create a new A Race and Training Block in one form."""
+    from datetime import timedelta
+    from .forms import ARaceForm, TrainingBlockForm
+
+    if request.method == 'POST':
+        race_form = ARaceForm(request.POST, prefix='race')
+        block_form = TrainingBlockForm(request.POST, prefix='block')
+        if race_form.is_valid() and block_form.is_valid():
+            a_race = race_form.save()
+            training_block = block_form.save(commit=False)
+            training_block.a_race = a_race
+            if not training_block.start_date:
+                training_block.start_date = a_race.date - timedelta(weeks=TrainingBlockForm.DEFAULT_BLOCK_LENGTH_WEEKS)
+            if not training_block.end_date:
+                training_block.end_date = a_race.date
+            if not training_block.name:
+                training_block.name = f"{a_race.name} Block"
+            training_block.save()
+            return redirect('block_detail', block_id=training_block.id)
+    else:
+        race_form = ARaceForm(prefix='race')
+        block_form = TrainingBlockForm(prefix='block')
+
+    context = {
+        'race_form': race_form,
+        'block_form': block_form,
+    }
+    return render(request, 'block_create.html', context)
+
 
 def block_detail(request, block_id):
     """Detail page for a single training block."""
