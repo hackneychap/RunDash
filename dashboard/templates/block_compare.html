@@ -1,0 +1,297 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="mb-8">
+    <h1 class="text-4xl font-extrabold tracking-tight">Training Block Comparison</h1>
+    <p class="text-base-content/70 mt-2">Compare blocks aligned by weeks out from race date</p>
+</div>
+
+<!-- Block Selectors -->
+<div class="card bg-base-100 shadow-xl border border-white/5 mb-8">
+    <div class="card-body">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Block A (Current) -->
+            <div>
+                <label class="label">
+                    <span class="label-text font-semibold text-blue-500">Current Block (Blue)</span>
+                </label>
+                <div class="text-lg font-bold">{{ block_a_name }}</div>
+                {% if current_block %}
+                <div class="text-sm text-base-content/60">
+                    {{ current_block.start_date|date:"M d, Y" }} — {{ current_block.end_date|date:"M d, Y" }}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Block B (Comparison) -->
+            <div>
+                <label class="label">
+                    <span class="label-text font-semibold text-emerald-500">Comparison Block (Green)</span>
+                </label>
+                <form method="get" class="flex gap-2">
+                    <select name="compare_block" class="select select-bordered flex-1" onchange="this.form.submit()">
+                        {% for block in all_blocks %}
+                        {% if block != current_block %}
+                        <option value="{{ block.id }}" {% if compare_block and compare_block.id == block.id %}selected{% endif %}>
+                            {{ block.name }} ({{ block.start_date|date:"M d, Y" }} — {{ block.end_date|date:"M d, Y" }})
+                        </option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </form>
+                {% if compare_block %}
+                <div class="text-sm text-base-content/60 mt-1">
+                    {{ compare_block.start_date|date:"M d, Y" }} — {{ compare_block.end_date|date:"M d, Y" }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toggle: Week-by-week vs Cumulative -->
+<div class="flex justify-center mb-6">
+    <div class="btn-group">
+        <button id="btn-weekly" class="btn btn-active" onclick="setView('weekly')">Week-by-Week</button>
+        <button id="btn-cumulative" class="btn" onclick="setView('cumulative')">Cumulative</button>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+    <!-- Distance Chart -->
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Distance (km)</h2>
+            <canvas id="distanceChart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Duration Chart -->
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Duration (hrs)</h2>
+            <canvas id="durationChart"></canvas>
+        </div>
+    </div>
+    
+    <!-- Elevation Chart -->
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Elevation Gain (m)</h2>
+            <canvas id="elevationChart"></canvas>
+        </div>
+    </div>
+    
+    <!-- TSS Chart -->
+    <div class="card bg-base-100 shadow-xl border border-white/5">
+        <div class="card-body">
+            <h2 class="card-title text-xl mb-4">Training Stress Score (TSS)</h2>
+            <canvas id="tssChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Section Markers Legend -->
+<div class="card bg-base-100 shadow-xl border border-white/5 mb-8">
+    <div class="card-body">
+        <h2 class="card-title text-xl mb-4">Section Markers</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 bg-blue-500/30 rounded"></div>
+                <span class="text-sm">{{ block_a_name }} Sections</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="w-4 h-4 bg-emerald-500/30 rounded"></div>
+                <span class="text-sm">{{ block_b_name }} Sections</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Data from Django
+    const blockAData = {{ block_a_data|safe }};
+    const blockBData = {{ block_b_data|safe }};
+    const blockASections = {{ block_a_sections|safe }};
+    const blockBSections = {{ block_b_sections|safe }};
+    const blockAName = "{{ block_a_name|escapejs }}";
+    const blockBName = "{{ block_b_name|escapejs }}";
+    
+    // Theme defaults for Chart.js
+    Chart.defaults.color = '#9ca3af';
+    Chart.defaults.font.family = "'Inter', sans-serif";
+    
+    // Store chart instances
+    let charts = {};
+    let currentView = 'weekly';
+    
+    // Prepare data for charts
+    function prepareChartData(metric) {
+        // Get all unique weeks from both blocks
+        const allWeeks = new Set();
+        blockAData.forEach(d => allWeeks.add(d.week));
+        blockBData.forEach(d => allWeeks.add(d.week));
+        
+        // Sort weeks in descending order (higher weeks out = earlier in training)
+        const sortedWeeks = Array.from(allWeeks).sort((a, b) => b - a);
+        
+        // Create lookup maps
+        const mapA = {};
+        blockAData.forEach(d => mapA[d.week] = d[metric]);
+        const mapB = {};
+        blockBData.forEach(d => mapB[d.week] = d[metric]);
+        
+        // Calculate cumulative values if needed
+        let valuesA = [];
+        let valuesB = [];
+        
+        if (currentView === 'cumulative') {
+            let cumA = 0;
+            let cumB = 0;
+            // Process from highest week (earliest) to lowest week (latest)
+            for (const week of sortedWeeks) {
+                cumA += (mapA[week] || 0);
+                cumB += (mapB[week] || 0);
+                valuesA.push(cumA);
+                valuesB.push(cumB);
+            }
+        } else {
+            for (const week of sortedWeeks) {
+                valuesA.push(mapA[week] || null);
+                valuesB.push(mapB[week] || null);
+            }
+        }
+        
+        return {
+            labels: sortedWeeks.map(w => `${w}w`),
+            valuesA: valuesA,
+            valuesB: valuesB,
+            weeks: sortedWeeks
+        };
+    }
+    
+    // Create section annotations
+    function getSectionAnnotations(sections, color, weeks) {
+        const annotations = [];
+        sections.forEach((section, i) => {
+            // Find the index of the week in our sorted array
+            const startIdx = weeks.indexOf(section.start_week);
+            const endIdx = weeks.indexOf(section.end_week);
+            if (startIdx !== -1 && endIdx !== -1) {
+                annotations.push({
+                    type: 'box',
+                    xMin: Math.max(0, Math.min(startIdx, endIdx)),
+                    xMax: Math.min(weeks.length - 1, Math.max(startIdx, endIdx)),
+                    backgroundColor: color,
+                    borderWidth: 0,
+                    label: {
+                        content: section.name,
+                        display: true,
+                        position: 'start',
+                        color: '#fff',
+                        font: { size: 10 }
+                    }
+                });
+            }
+        });
+        return annotations;
+    }
+    
+    // Create or update a chart
+    function createChart(canvasId, metric, label, color) {
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        const data = prepareChartData(metric);
+        
+        if (charts[canvasId]) {
+            charts[canvasId].destroy();
+        }
+        
+        charts[canvasId] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.labels,
+                datasets: [
+                    {
+                        label: blockAName,
+                        data: data.valuesA,
+                        borderColor: 'rgba(59, 130, 246, 1)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                    },
+                    {
+                        label: blockBName,
+                        data: data.valuesB,
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => `Week ${items[0].label} out from race`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Weeks Out from Race'
+                        },
+                        grid: {
+                            display: false
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: label
+                        },
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.05)'
+                        }
+                    }
+                }
+            }
+        });
+    }
+    
+    // Set view mode
+    function setView(view) {
+        currentView = view;
+        document.getElementById('btn-weekly').classList.toggle('btn-active', view === 'weekly');
+        document.getElementById('btn-cumulative').classList.toggle('btn-active', view === 'cumulative');
+        
+        // Recreate all charts
+        createChart('distanceChart', 'distance', 'Distance (km)', 'blue');
+        createChart('durationChart', 'duration', 'Duration (hrs)', 'emerald');
+        createChart('elevationChart', 'elevation', 'Elevation (m)', 'amber');
+        createChart('tssChart', 'tss', 'TSS', 'purple');
+    }
+    
+    // Initialize charts
+    document.addEventListener('DOMContentLoaded', function() {
+        setView('weekly');
+    });
+</script>
+{% endblock %}

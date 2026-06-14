@@ -40,12 +40,19 @@
     <nav class="navbar bg-base-100 shadow-xl mb-8 sticky top-0 z-50">
         <div class="container mx-auto">
             <div class="flex-1">
-                <a class="btn btn-ghost normal-case text-2xl font-bold bg-gradient-to-r from-blue-500 to-teal-400 text-transparent bg-clip-text">
+                <a href="{% url 'dashboard' %}" class="btn btn-ghost normal-case text-2xl font-bold bg-gradient-to-r from-blue-500 to-teal-400 text-transparent bg-clip-text">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500 inline-block mr-1 -mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
                     RunDash
                 </a>
+            </div>
+            <div class="flex-none">
+                <ul class="menu menu-horizontal px-1 gap-1">
+                    <li><a href="{% url 'dashboard' %}" class="{% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Dashboard</a></li>
+                    <li><a href="{% url 'blocks_list' %}" class="{% if request.resolver_match.url_name in 'blocks_list,block_detail,block_create' %}active{% endif %}">Training Blocks</a></li>
+                    <li><a href="{% url 'block_compare' %}" class="{% if request.resolver_match.url_name == 'block_compare' %}active{% endif %}">Compare</a></li>
+                </ul>
             </div>
         </div>
     </nav>
