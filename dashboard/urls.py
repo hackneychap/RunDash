@@ -8,4 +8,5 @@ urlpatterns = [
     path('blocks/', views.blocks_list, name='blocks_list'),
     path('blocks/<int:block_id>/', views.block_detail, name='block_detail'),
     path('blocks/compare/', views.block_compare, name='block_compare'),
+    path('blocks/new/', views.block_create, name='block_create'),
 ]
