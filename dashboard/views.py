@@ -7,6 +7,7 @@ from django.db.models import Sum, Avg, Count
 from django.db.models.functions import TruncWeek, TruncMonth
 from django.http import HttpResponse
 from django.conf import settings
+from django.core.cache import cache
 from django_q.tasks import async_task, Task
 from .models import RunActivity, TrainingBlock
 from .tasks import sync_garmin_data
@@ -15,96 +16,114 @@ LOCK_FILE = os.path.join(settings.BASE_DIR, 'garmin_sync.lock')
 LOCK_TIMEOUT = 1200  # 20 minutes timeout
 
 def dashboard(request):
-    runs = RunActivity.objects.all().order_by('date')
-    
-    # ⚡ Bolt Optimization: Combine 3 separate aggregates into a single DB query
-    # Reduces N+1 query pattern on the dashboard load
-    aggregates = runs.aggregate(
-        total_km=Sum('distance_km'),
-        total_duration=Sum('duration_minutes'),
-        total_elevation=Sum('elevation_gain'),
-        avg_tss=Avg('tss')
-    )
+    # ⚡ Bolt Optimization: Cache the dashboard context
+    # Reduces expensive DB aggregation queries on every page load
+    context = cache.get('dashboard_context')
+    if not context:
+        runs = RunActivity.objects.all().order_by('date')
 
-    total_km = aggregates['total_km'] or 0
-    total_duration = aggregates['total_duration'] or 0
-    total_elevation = aggregates['total_elevation'] or 0
-    avg_tss = aggregates['avg_tss'] or 0
-    
-    weekly_stats = runs.annotate(week=TruncWeek('date')).values('week').annotate(
-        total_km=Sum('distance_km'),
-        total_duration=Sum('duration_minutes'),
-        total_tss=Sum('tss'),
-        total_elevation=Sum('elevation_gain')
-    ).order_by('week')
-    
-    monthly_stats = runs.annotate(month=TruncMonth('date')).values('month').annotate(
-        total_km=Sum('distance_km'),
-        total_duration=Sum('duration_minutes'),
-        total_tss=Sum('tss')
-    ).order_by('month')
-    
-    weekly_labels, weekly_km, weekly_tss, weekly_elevation, weekly_duration = [], [], [], [], []
-    for stat in weekly_stats:
-        weekly_labels.append(stat['week'].strftime('%Y-%m-%d') if stat['week'] else '')
-        weekly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
-        weekly_tss.append(round(stat['total_tss'], 1) if stat['total_tss'] else 0)
-        weekly_elevation.append(round(stat['total_elevation'], 1) if stat['total_elevation'] else 0)
-        weekly_duration.append(round((stat['total_duration'] or 0) / 60, 1))
+        # ⚡ Bolt Optimization: Combine 3 separate aggregates into a single DB query
+        # Reduces N+1 query pattern on the dashboard load
+        aggregates = runs.aggregate(
+            total_km=Sum('distance_km'),
+            total_duration=Sum('duration_minutes'),
+            total_elevation=Sum('elevation_gain'),
+            avg_tss=Avg('tss')
+        )
 
-    monthly_labels, monthly_km = [], []
-    for stat in monthly_stats:
-        monthly_labels.append(stat['month'].strftime('%Y-%m') if stat['month'] else '')
-        monthly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
-    
-    # Week-vs-week comparison (proportional: same days into the week)
-    today = date.today()
-    this_week_start = today - timedelta(days=today.weekday())  # Most recent Monday
-    last_week_start = this_week_start - timedelta(days=7)
-    last_week_same_point = last_week_start + (today - this_week_start)
+        total_km = aggregates['total_km'] or 0
+        total_duration = aggregates['total_duration'] or 0
+        total_elevation = aggregates['total_elevation'] or 0
+        avg_tss = aggregates['avg_tss'] or 0
 
-    this_week_qs = RunActivity.objects.filter(date__gte=this_week_start, date__lte=today)
-    last_week_qs = RunActivity.objects.filter(date__gte=last_week_start, date__lte=last_week_same_point)
+        weekly_stats = runs.annotate(week=TruncWeek('date')).values('week').annotate(
+            total_km=Sum('distance_km'),
+            total_duration=Sum('duration_minutes'),
+            total_tss=Sum('tss'),
+            total_elevation=Sum('elevation_gain')
+        ).order_by('week')
 
-    tw_agg = this_week_qs.aggregate(
-        d=Sum('distance_km'), e=Sum('elevation_gain'),
-        dur=Sum('duration_minutes'), t=Sum('tss'))
-    lw_agg = last_week_qs.aggregate(
-        d=Sum('distance_km'), e=Sum('elevation_gain'),
-        dur=Sum('duration_minutes'), t=Sum('tss'))
+        monthly_stats = runs.annotate(month=TruncMonth('date')).values('month').annotate(
+            total_km=Sum('distance_km'),
+            total_duration=Sum('duration_minutes'),
+            total_tss=Sum('tss')
+        ).order_by('month')
 
-    tw_dist = round(tw_agg['d'] or 0, 1)
-    lw_dist = round(lw_agg['d'] or 0, 1)
-    tw_elev = round(tw_agg['e'] or 0, 1)
-    lw_elev = round(lw_agg['e'] or 0, 1)
-    tw_dur  = round((tw_agg['dur'] or 0) / 60, 1)
-    lw_dur  = round((lw_agg['dur'] or 0) / 60, 1)
-    tw_tss  = round(tw_agg['t'] or 0, 1)
-    lw_tss  = round(lw_agg['t'] or 0, 1)
+        weekly_labels, weekly_km, weekly_tss, weekly_elevation, weekly_duration = [], [], [], [], []
+        for stat in weekly_stats:
+            weekly_labels.append(stat['week'].strftime('%Y-%m-%d') if stat['week'] else '')
+            weekly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
+            weekly_tss.append(round(stat['total_tss'], 1) if stat['total_tss'] else 0)
+            weekly_elevation.append(round(stat['total_elevation'], 1) if stat['total_elevation'] else 0)
+            weekly_duration.append(round((stat['total_duration'] or 0) / 60, 1))
 
-    def pct(this, last):
-        if last == 0:
-            return None
-        return round(((this - last) / last) * 100, 1)
+        monthly_labels, monthly_km = [], []
+        for stat in monthly_stats:
+            monthly_labels.append(stat['month'].strftime('%Y-%m') if stat['month'] else '')
+            monthly_km.append(round(stat['total_km'], 1) if stat['total_km'] else 0)
 
-    context = {
-        'total_km': round(total_km, 2),
-        'total_duration': round(total_duration / 60, 1), # Hours
-        'total_elevation': round(total_elevation, 1),
-        'avg_tss': round(avg_tss, 1),
-        'weekly_labels': json.dumps(weekly_labels),
-        'weekly_km': json.dumps(weekly_km),
-        'weekly_tss': json.dumps(weekly_tss),
-        'weekly_elevation': json.dumps(weekly_elevation),
-        'weekly_duration': json.dumps(weekly_duration),
-        'monthly_labels': json.dumps(monthly_labels),
-        'monthly_km': json.dumps(monthly_km),
-        # Week-vs-week comparison cards
-        'tw_dist': tw_dist, 'lw_dist': lw_dist, 'pct_dist': pct(tw_dist, lw_dist),
-        'tw_elev': tw_elev, 'lw_elev': lw_elev, 'pct_elev': pct(tw_elev, lw_elev),
-        'tw_dur': tw_dur, 'lw_dur': lw_dur, 'pct_dur': pct(tw_dur, lw_dur),
-        'tw_tss': tw_tss, 'lw_tss': lw_tss, 'pct_tss': pct(tw_tss, lw_tss),
-    }
+        # Week-vs-week comparison (proportional: same days into the week)
+        today = date.today()
+        this_week_start = today - timedelta(days=today.weekday())  # Most recent Monday
+        last_week_start = this_week_start - timedelta(days=7)
+        last_week_same_point = last_week_start + (today - this_week_start)
+
+        this_week_qs = RunActivity.objects.filter(date__gte=this_week_start, date__lte=today)
+        last_week_qs = RunActivity.objects.filter(date__gte=last_week_start, date__lte=last_week_same_point)
+
+        tw_agg = this_week_qs.aggregate(
+            d=Sum('distance_km'), e=Sum('elevation_gain'),
+            dur=Sum('duration_minutes'), t=Sum('tss'))
+        lw_agg = last_week_qs.aggregate(
+            d=Sum('distance_km'), e=Sum('elevation_gain'),
+            dur=Sum('duration_minutes'), t=Sum('tss'))
+
+        tw_dist = round(tw_agg['d'] or 0, 1)
+        lw_dist = round(lw_agg['d'] or 0, 1)
+        tw_elev = round(tw_agg['e'] or 0, 1)
+        lw_elev = round(lw_agg['e'] or 0, 1)
+        tw_dur  = round((tw_agg['dur'] or 0) / 60, 1)
+        lw_dur  = round((lw_agg['dur'] or 0) / 60, 1)
+        tw_tss  = round(tw_agg['t'] or 0, 1)
+        lw_tss  = round(lw_agg['t'] or 0, 1)
+
+        def pct(this, last):
+            if last == 0:
+                return None
+            return round(((this - last) / last) * 100, 1)
+
+        context = {
+            'total_km': round(total_km, 2),
+            'total_duration': round(total_duration / 60, 1), # Hours
+            'total_elevation': round(total_elevation, 1),
+            'avg_tss': round(avg_tss, 1),
+            'weekly_labels': json.dumps(weekly_labels),
+            'weekly_km': json.dumps(weekly_km),
+            'weekly_tss': json.dumps(weekly_tss),
+            'weekly_elevation': json.dumps(weekly_elevation),
+            'weekly_duration': json.dumps(weekly_duration),
+            'monthly_labels': json.dumps(monthly_labels),
+            'monthly_km': json.dumps(monthly_km),
+            # Week-vs-week comparison cards
+            'tw_dist': tw_dist, 'lw_dist': lw_dist, 'pct_dist': pct(tw_dist, lw_dist),
+            'tw_elev': tw_elev, 'lw_elev': lw_elev, 'pct_elev': pct(tw_elev, lw_elev),
+            'tw_dur': tw_dur, 'lw_dur': lw_dur, 'pct_dur': pct(tw_dur, lw_dur),
+            'tw_tss': tw_tss, 'lw_tss': lw_tss, 'pct_tss': pct(tw_tss, lw_tss),
+        }
+
+        # Cache for 1 day, it gets invalidated when new data arrives
+
+        # Calculate seconds until midnight to ensure date-dependent logic (like today)
+        # refreshes correctly the next day if no sync happens.
+        now = datetime.now()
+        midnight = datetime.combine(now.date() + timedelta(days=1), datetime.min.time())
+        seconds_until_midnight = int((midnight - now).total_seconds())
+
+        # Cache until midnight, or max 24 hours
+        cache_timeout = min(seconds_until_midnight, 60 * 60 * 24)
+        cache.set('dashboard_context', context, cache_timeout)
+
+
     return render(request, 'dashboard.html', context)
 
 def trigger_sync(request):
@@ -121,7 +140,7 @@ def trigger_sync(request):
 
     # If no active lock exists, trigger a new sync task
     task_id = async_task(sync_garmin_data)
-    
+
     # Write the task_id to the lock file
     try:
         with open(LOCK_FILE, 'w') as f:
@@ -206,29 +225,29 @@ def sync_status(request, task_id):
 def block_compare(request):
     """
     Compare two training blocks aligned by weeks out from race date.
-    
+
     The race date is the anchor - we count backwards from it.
     Both blocks are plotted on the same 'weeks out from race' axis.
     """
     from .models import TrainingBlock, TrainingBlockSection, RunActivity
     from datetime import timedelta
-    
+
     today = date.today()
-    
+
     # Get all blocks ordered by start date
     all_blocks = TrainingBlock.objects.select_related('a_race').order_by('-start_date')
-    
+
     # Auto-detect current block (today is within its dates)
     current_block = None
     for block in all_blocks:
         if block.start_date <= today <= block.end_date:
             current_block = block
             break
-    
+
     # If no current block, use the most recent one
     if current_block is None and all_blocks.exists():
         current_block = all_blocks.first()
-    
+
     # Get the selected comparison block from query params
     compare_block_id = request.GET.get('compare_block')
     compare_block = None
@@ -237,25 +256,25 @@ def block_compare(request):
     elif current_block:
         # Default: compare with the next most recent block
         compare_block = all_blocks.exclude(id=current_block.id).first()
-    
+
     # Calculate weeks out from race for a given date in a block
     def get_weeks_out(block, d):
         """Calculate weeks out from race date."""
         delta = block.a_race.date - d
         return delta.days // 7
-    
+
     # Query data for both blocks
     block_a_data = []
     block_b_data = []
     block_a_sections = []
     block_b_sections = []
-    
+
     if current_block and compare_block:
         # Block A (current block) - query all activities
         activities_a = RunActivity.objects.filter(
             training_block=current_block
         ).order_by('date')
-        
+
         # Group by weeks out from race
         weeks_a = {}
         for activity in activities_a:
@@ -266,7 +285,7 @@ def block_compare(request):
             weeks_a[weeks_out]['duration'] += activity.duration_minutes
             weeks_a[weeks_out]['elevation'] += (activity.elevation_gain or 0)
             weeks_a[weeks_out]['tss'] += (activity.tss or 0)
-        
+
         # Convert to sorted list
         for week_num in sorted(weeks_a.keys(), reverse=True):
             data = weeks_a[week_num]
@@ -277,7 +296,7 @@ def block_compare(request):
                 'elevation': round(data['elevation'], 0),
                 'tss': round(data['tss'], 0),
             })
-        
+
         # Block A sections
         sections_a = current_block.sections.all().order_by('order')
         for section in sections_a:
@@ -286,12 +305,12 @@ def block_compare(request):
                 'start_week': get_weeks_out(current_block, section.start_date),
                 'end_week': get_weeks_out(current_block, section.end_date),
             })
-        
+
         # Block B (comparison block) - query all activities
         activities_b = RunActivity.objects.filter(
             training_block=compare_block
         ).order_by('date')
-        
+
         # Group by weeks out from race
         weeks_b = {}
         for activity in activities_b:
@@ -302,7 +321,7 @@ def block_compare(request):
             weeks_b[weeks_out]['duration'] += activity.duration_minutes
             weeks_b[weeks_out]['elevation'] += (activity.elevation_gain or 0)
             weeks_b[weeks_out]['tss'] += (activity.tss or 0)
-        
+
         # Convert to sorted list
         for week_num in sorted(weeks_b.keys(), reverse=True):
             data = weeks_b[week_num]
@@ -313,7 +332,7 @@ def block_compare(request):
                 'elevation': round(data['elevation'], 0),
                 'tss': round(data['tss'], 0),
             })
-        
+
         # Block B sections
         sections_b = compare_block.sections.all().order_by('order')
         for section in sections_b:
@@ -322,7 +341,7 @@ def block_compare(request):
                 'start_week': get_weeks_out(compare_block, section.start_date),
                 'end_week': get_weeks_out(compare_block, section.end_date),
             })
-    
+
     context = {
         'all_blocks': all_blocks,
         'current_block': current_block,
@@ -334,7 +353,7 @@ def block_compare(request):
         'block_a_name': current_block.name if current_block else 'Current Block',
         'block_b_name': compare_block.name if compare_block else 'Compare Block',
     }
-    
+
     return render(request, 'block_compare.html', context)
 
 
@@ -426,7 +445,7 @@ def block_detail(request, block_id):
     from .models import TrainingBlock, ARace, TrainingBlockSection, BRace
     from collections import defaultdict
     from datetime import date
-    
+
     try:
         training_block = TrainingBlock.objects.select_related('a_race').prefetch_related(
             'sections', 'b_races', 'activities'
@@ -434,33 +453,33 @@ def block_detail(request, block_id):
     except TrainingBlock.DoesNotExist:
         from django.http import Http404
         raise Http404("Training block not found")
-    
+
     a_race = training_block.a_race
     sections = training_block.sections.all()
     b_races = training_block.b_races.all()
     activities = training_block.activities.all().order_by('date')
-    
+
     # Calculate weeks out from race for each run
     # (a_race.date - run.date).days / 7
     for activity in activities:
         days_to_race = (a_race.date - activity.date).days
         activity.weeks_out = round(days_to_race / 7, 1)
-    
+
     # Group runs by week number (counting from block start)
     weekly_data = defaultdict(lambda: {'distance': 0, 'duration': 0, 'elevation': 0, 'tss': 0, 'run_count': 0})
-    
+
     for activity in activities:
         # Calculate week number from block start
         days_since_start = (activity.date - training_block.start_date).days
         week_num = (days_since_start // 7) + 1  # Week 1, Week 2, etc.
         activity.week_number = week_num
-        
+
         weekly_data[week_num]['distance'] += activity.distance_km or 0
         weekly_data[week_num]['duration'] += activity.duration_minutes or 0
         weekly_data[week_num]['elevation'] += activity.elevation_gain or 0
         weekly_data[week_num]['tss'] += activity.tss or 0
         weekly_data[week_num]['run_count'] += 1
-    
+
     # Convert to sorted list for template
     weekly_stats = []
     for week_num in sorted(weekly_data.keys()):
@@ -473,29 +492,29 @@ def block_detail(request, block_id):
             'tss': round(data['tss'], 1),
             'run_count': data['run_count'],
         })
-    
+
     # Prepare chart data
     chart_labels = [f"Week {s['week_number']}" for s in weekly_stats]
     chart_distance = [s['distance'] for s in weekly_stats]
     chart_tss = [s['tss'] for s in weekly_stats]
-    
+
     # Check if block is active (current date is between start and end)
     today = date.today()
     is_active = training_block.start_date <= today <= training_block.end_date
-    
+
     # Calculate current week number if active
     current_week = None
     if is_active:
         days_since_start = (today - training_block.start_date).days
         current_week = (days_since_start // 7) + 1
-    
+
     # Block duration in weeks
     block_duration_days = (training_block.end_date - training_block.start_date).days
     block_duration_weeks = (block_duration_days // 7) + 1
-    
+
     # Days to race
     days_to_race = (a_race.date - today).days
-    
+
     context = {
         'training_block': training_block,
         'a_race': a_race,
