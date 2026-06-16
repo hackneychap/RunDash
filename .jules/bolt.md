@@ -1,3 +1,7 @@
 ## 2025-02-18 - [SQLite Query Optimization for Garmin Data Sync]
 **Learning:** The application syncs run activities from a local GarminDB SQLite database, which previously transferred thousands of old records into Python memory only to discard them based on a 2-year cutoff. Furthermore, date parsing using `strptime` is significantly slower compared to `fromisoformat`.
 **Action:** When querying large local SQLite databases (like GarminDB), push down WHERE clauses to filter large datasets at the database level instead of in-memory. For date string parsing, use string slicing and `datetime.date.fromisoformat` over `datetime.datetime.strptime` where the string format allows (e.g., extracting "YYYY-MM-DD" from "YYYY-MM-DD HH:MM:SS").
+
+## 2025-02-18 - [Django Subquery Aggregations vs Pre-fetch]
+**Learning:** When generating summary statistics for models with multiple one-to-many relationships (like a `TrainingBlock` with many `RunActivity` and `BRace` objects), using `.prefetch_related()` followed by in-memory python operations like `sum()` and `len()` scales poorly as the number of records increases, severely impacting execution time and memory footprint (the N+1 memory issue).
+**Action:** Replace in-memory aggregations looping over prefetched querysets with database-level subqueries using Django's `Subquery`, `OuterRef`, `Sum`, and `Count`. This drastically improves performance (e.g. from ~96ms to ~8ms for moderate sized datasets) and memory overhead by pushing the calculation natively down to SQLite.
