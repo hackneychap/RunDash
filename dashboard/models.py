@@ -1,4 +1,7 @@
 from django.db import models
+from django.db.models.signals import post_save, post_delete
+from django.dispatch import receiver
+from django.core.cache import cache
 
 
 class ARace(models.Model):
@@ -82,3 +85,8 @@ class RunActivity(models.Model):
 
     def __str__(self):
         return f"Run on {self.date} - {self.distance_km}km"
+
+
+@receiver([post_save, post_delete], sender=RunActivity)
+def invalidate_dashboard_cache(sender, instance, **kwargs):
+    cache.delete('dashboard_context')
