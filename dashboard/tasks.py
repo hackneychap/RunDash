@@ -7,6 +7,7 @@ import shutil
 import glob
 import sys
 from django.conf import settings
+from django.core.cache import cache
 from django_q.tasks import async_task
 from .models import RunActivity
 
@@ -403,6 +404,10 @@ def _import_data(sqlite_db_path):
             RunActivity.objects.bulk_create(create_list, batch_size=500)
         if update_list:
             RunActivity.objects.bulk_update(update_list, fields=['date', 'distance_km', 'duration_minutes', 'tss', 'elevation_gain'], batch_size=500)
+
+        # Invalidate dashboard cache manually since bulk operations don't trigger post_save signals
+        if create_list or update_list:
+            cache.delete('dashboard_context')
 
     except sqlite3.OperationalError as e:
         print(f"Error querying garmin_activities.db: {e}")
