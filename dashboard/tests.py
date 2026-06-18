@@ -81,6 +81,8 @@ class SyncTaskTests(TestCase):
             def side_effect(path):
                 if 'garmin.db' in str(path):
                     return True
+                if 'garmin_activities.db' in str(path):
+                    return True
                 return orig_exists(path)
             with patch('os.path.exists', side_effect=side_effect):
                 sync_garmin_data()
