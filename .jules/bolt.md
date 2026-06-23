@@ -1,3 +1,6 @@
 ## 2025-02-18 - [SQLite Query Optimization for Garmin Data Sync]
 **Learning:** The application syncs run activities from a local GarminDB SQLite database, which previously transferred thousands of old records into Python memory only to discard them based on a 2-year cutoff. Furthermore, date parsing using `strptime` is significantly slower compared to `fromisoformat`.
 **Action:** When querying large local SQLite databases (like GarminDB), push down WHERE clauses to filter large datasets at the database level instead of in-memory. For date string parsing, use string slicing and `datetime.date.fromisoformat` over `datetime.datetime.strptime` where the string format allows (e.g., extracting "YYYY-MM-DD" from "YYYY-MM-DD HH:MM:SS").
+## 2024-05-14 - Caching the Dashboard Context
+**Learning:** The dashboard calculates multiple aggregations over the `RunActivity` table every single time the page is loaded. This is extremely inefficient and will scale poorly as more runs are added. This application is a prime candidate for Django's caching framework for these aggregations.
+**Action:** The dashboard calculates expensive aggregations over all RunActivity objects, we should cache the dashboard context entirely and only invalidate the cache when a `RunActivity` is modified or a new Garmin sync completes.
