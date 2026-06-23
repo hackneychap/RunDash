@@ -7,6 +7,7 @@ import shutil
 import glob
 import sys
 from django.conf import settings
+from django.core.cache import cache
 from django_q.tasks import async_task
 from .models import RunActivity
 
@@ -270,6 +271,8 @@ def finalize_garmin_import():
     sqlite_db_path = os.path.join(HEALTH_DATA_DIR, "DBs", "garmin_activities.db")
     try:
         _import_data(sqlite_db_path)
+        # Clear dashboard cache after bulk operations complete
+        cache.delete('dashboard_context')
         print("Import completed successfully.")
     except Exception as e:
         print(f"Error during Django DB import: {e}")

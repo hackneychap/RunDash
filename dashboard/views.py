@@ -7,6 +7,8 @@ from django.db.models import Sum, Avg, Count
 from django.db.models.functions import TruncWeek, TruncMonth
 from django.http import HttpResponse
 from django.conf import settings
+from django.core.cache import cache
+from django.utils import timezone
 from django_q.tasks import async_task, Task
 from .models import RunActivity, TrainingBlock
 from .tasks import sync_garmin_data
@@ -15,6 +17,11 @@ LOCK_FILE = os.path.join(settings.BASE_DIR, 'garmin_sync.lock')
 LOCK_TIMEOUT = 1200  # 20 minutes timeout
 
 def dashboard(request):
+    # ⚡ Bolt Optimization: Cache the dashboard context
+    cached_context = cache.get('dashboard_context')
+    if cached_context:
+        return render(request, 'dashboard.html', cached_context)
+
     runs = RunActivity.objects.all().order_by('date')
     
     # ⚡ Bolt Optimization: Combine 3 separate aggregates into a single DB query
@@ -87,7 +94,12 @@ def dashboard(request):
             return None
         return round(((this - last) / last) * 100, 1)
 
+    # Force evaluate the queryset by wrapping it in list().
+    # Otherwise, Django's cache will only pickle the query and hit the DB on cache hit.
+    runs_list = list(runs)
+
     context = {
+        'runs': runs_list,
         'total_km': round(total_km, 2),
         'total_duration': round(total_duration / 60, 1), # Hours
         'total_elevation': round(total_elevation, 1),
@@ -105,6 +117,15 @@ def dashboard(request):
         'tw_dur': tw_dur, 'lw_dur': lw_dur, 'pct_dur': pct(tw_dur, lw_dur),
         'tw_tss': tw_tss, 'lw_tss': lw_tss, 'pct_tss': pct(tw_tss, lw_tss),
     }
+
+    # Calculate seconds until midnight in the current timezone for cache expiration
+    now = timezone.localtime()
+    tomorrow = now.date() + timedelta(days=1)
+    midnight = timezone.make_aware(datetime.combine(tomorrow, datetime.min.time()))
+    seconds_until_midnight = int((midnight - now).total_seconds())
+
+    cache.set('dashboard_context', context, timeout=seconds_until_midnight)
+
     return render(request, 'dashboard.html', context)
 
 def trigger_sync(request):
