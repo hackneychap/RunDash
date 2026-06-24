@@ -7,6 +7,8 @@ from django.db.models import Sum, Avg, Count
 from django.db.models.functions import TruncWeek, TruncMonth
 from django.http import HttpResponse
 from django.conf import settings
+from django.core.cache import cache
+from django.utils import timezone
 from django_q.tasks import async_task, Task
 from .models import RunActivity, TrainingBlock
 from .tasks import sync_garmin_data
@@ -15,11 +17,18 @@ LOCK_FILE = os.path.join(settings.BASE_DIR, 'garmin_sync.lock')
 LOCK_TIMEOUT = 1200  # 20 minutes timeout
 
 def dashboard(request):
-    runs = RunActivity.objects.all().order_by('date')
+    # ⚡ Bolt Optimization: Cache the expensive dashboard aggregations
+    context = cache.get('dashboard_context')
+    if context:
+        return render(request, 'dashboard.html', context)
+
+    # Evaluate list to avoid query execution after cache hit
+    runs = list(RunActivity.objects.all().order_by('date'))
+    runs_qs = RunActivity.objects.all().order_by('date')
     
     # ⚡ Bolt Optimization: Combine 3 separate aggregates into a single DB query
     # Reduces N+1 query pattern on the dashboard load
-    aggregates = runs.aggregate(
+    aggregates = runs_qs.aggregate(
         total_km=Sum('distance_km'),
         total_duration=Sum('duration_minutes'),
         total_elevation=Sum('elevation_gain'),
@@ -31,14 +40,14 @@ def dashboard(request):
     total_elevation = aggregates['total_elevation'] or 0
     avg_tss = aggregates['avg_tss'] or 0
     
-    weekly_stats = runs.annotate(week=TruncWeek('date')).values('week').annotate(
+    weekly_stats = runs_qs.annotate(week=TruncWeek('date')).values('week').annotate(
         total_km=Sum('distance_km'),
         total_duration=Sum('duration_minutes'),
         total_tss=Sum('tss'),
         total_elevation=Sum('elevation_gain')
     ).order_by('week')
     
-    monthly_stats = runs.annotate(month=TruncMonth('date')).values('month').annotate(
+    monthly_stats = runs_qs.annotate(month=TruncMonth('date')).values('month').annotate(
         total_km=Sum('distance_km'),
         total_duration=Sum('duration_minutes'),
         total_tss=Sum('tss')
@@ -105,6 +114,14 @@ def dashboard(request):
         'tw_dur': tw_dur, 'lw_dur': lw_dur, 'pct_dur': pct(tw_dur, lw_dur),
         'tw_tss': tw_tss, 'lw_tss': lw_tss, 'pct_tss': pct(tw_tss, lw_tss),
     }
+
+    # Calculate seconds until midnight to prevent serving stale relative dates
+    now = timezone.localtime()
+    midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    timeout = int((midnight - now).total_seconds())
+
+    cache.set('dashboard_context', context, timeout)
+
     return render(request, 'dashboard.html', context)
 
 def trigger_sync(request):
