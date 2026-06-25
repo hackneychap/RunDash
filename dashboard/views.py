@@ -3,8 +3,8 @@ import os
 import time
 from datetime import date, datetime, timedelta
 from django.shortcuts import render, redirect
-from django.db.models import Sum, Avg, Count
-from django.db.models.functions import TruncWeek, TruncMonth
+from django.db.models import Sum, Avg, Count, Subquery, OuterRef, FloatField, IntegerField
+from django.db.models.functions import TruncWeek, TruncMonth, Coalesce
 from django.http import HttpResponse
 from django.conf import settings
 from django_q.tasks import async_task, Task
@@ -340,9 +340,34 @@ def block_compare(request):
 
 def blocks_list(request):
     """List all training blocks with summary stats."""
+    from .models import BRace
     today = date.today()
-    all_blocks = TrainingBlock.objects.select_related('a_race').prefetch_related(
-        'activities', 'b_races'
+
+    # ⚡ Bolt Optimization: Use Subquery to aggregate values at the database level
+    # Replaces python-side loops and memory loading of all RunActivity/BRace instances
+
+    activities_sum = RunActivity.objects.filter(
+        training_block=OuterRef('pk')
+    ).values('training_block').annotate(
+        total=Sum('distance_km')
+    ).values('total')
+
+    activities_count = RunActivity.objects.filter(
+        training_block=OuterRef('pk')
+    ).values('training_block').annotate(
+        count=Count('id')
+    ).values('count')
+
+    b_races_count_sq = BRace.objects.filter(
+        training_block=OuterRef('pk')
+    ).values('training_block').annotate(
+        count=Count('id')
+    ).values('count')
+
+    all_blocks = TrainingBlock.objects.select_related('a_race').annotate(
+        total_km_annotated=Coalesce(Subquery(activities_sum, output_field=FloatField()), 0.0),
+        total_runs_annotated=Coalesce(Subquery(activities_count, output_field=IntegerField()), 0),
+        b_races_count_annotated=Coalesce(Subquery(b_races_count_sq, output_field=IntegerField()), 0),
     ).order_by('-start_date')
 
     # Annotate each block with stats
@@ -360,21 +385,13 @@ def blocks_list(request):
         duration_days = (block.end_date - block.start_date).days
         duration_weeks = max(round(duration_days / 7), 1)
 
-        # Summary stats from prefetched activities (no extra query)
-        activities = block.activities.all()
-        total_km = sum(a.distance_km or 0 for a in activities)
-        total_runs = len(activities)
-
-        # B races count from prefetched (no extra query)
-        b_races_count = len(block.b_races.all())
-
         blocks_with_stats.append({
             'block': block,
             'status': status,
             'duration_weeks': duration_weeks,
-            'total_km': round(total_km, 1),
-            'total_runs': total_runs,
-            'b_races_count': b_races_count,
+            'total_km': round(block.total_km_annotated, 1),
+            'total_runs': block.total_runs_annotated,
+            'b_races_count': block.b_races_count_annotated,
         })
 
     # Sort: active first, then completed in reverse date order, then upcoming
