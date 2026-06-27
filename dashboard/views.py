@@ -7,6 +7,8 @@ from django.db.models import Sum, Avg, Count
 from django.db.models.functions import TruncWeek, TruncMonth
 from django.http import HttpResponse
 from django.conf import settings
+from django.core.cache import cache
+from django.utils import timezone
 from django_q.tasks import async_task, Task
 from .models import RunActivity, TrainingBlock
 from .tasks import sync_garmin_data
@@ -15,6 +17,11 @@ LOCK_FILE = os.path.join(settings.BASE_DIR, 'garmin_sync.lock')
 LOCK_TIMEOUT = 1200  # 20 minutes timeout
 
 def dashboard(request):
+    # Try to get cached context first
+    context = cache.get('dashboard_context')
+    if context:
+        return render(request, 'dashboard.html', context)
+
     runs = RunActivity.objects.all().order_by('date')
     
     # ⚡ Bolt Optimization: Combine 3 separate aggregates into a single DB query
@@ -105,6 +112,14 @@ def dashboard(request):
         'tw_dur': tw_dur, 'lw_dur': lw_dur, 'pct_dur': pct(tw_dur, lw_dur),
         'tw_tss': tw_tss, 'lw_tss': lw_tss, 'pct_tss': pct(tw_tss, lw_tss),
     }
+
+    # ⚡ Bolt Optimization: Cache the dashboard context until midnight
+    now = timezone.localtime()
+    tomorrow = now.date() + timedelta(days=1)
+    midnight = timezone.make_aware(datetime.combine(tomorrow, datetime.min.time()))
+    seconds_until_midnight = int((midnight - now).total_seconds())
+    cache.set('dashboard_context', context, timeout=seconds_until_midnight)
+
     return render(request, 'dashboard.html', context)
 
 def trigger_sync(request):
