@@ -44,3 +44,4 @@ WeightData/
 # OS Files
 .DS_Store
 Thumbs.db
+*.lock
