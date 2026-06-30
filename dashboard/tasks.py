@@ -8,6 +8,7 @@ import glob
 import sys
 from django.conf import settings
 from django_q.tasks import async_task
+from django.core.cache import cache
 from .models import RunActivity
 
 # Paths
@@ -403,6 +404,12 @@ def _import_data(sqlite_db_path):
             RunActivity.objects.bulk_create(create_list, batch_size=500)
         if update_list:
             RunActivity.objects.bulk_update(update_list, fields=['date', 'distance_km', 'duration_minutes', 'tss', 'elevation_gain'], batch_size=500)
+
+        # ⚡ Bolt Optimization: Invalidate the dashboard cache when new data is imported.
+        # Since bulk_create and bulk_update bypass Django signals, we must manually
+        # invalidate the cache here so the dashboard shows fresh data immediately.
+        if create_list or update_list:
+            cache.delete('dashboard_context_data')
 
     except sqlite3.OperationalError as e:
         print(f"Error querying garmin_activities.db: {e}")
