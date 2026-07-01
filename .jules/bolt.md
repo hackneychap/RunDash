@@ -1,3 +1,7 @@
 ## 2025-02-18 - [SQLite Query Optimization for Garmin Data Sync]
 **Learning:** The application syncs run activities from a local GarminDB SQLite database, which previously transferred thousands of old records into Python memory only to discard them based on a 2-year cutoff. Furthermore, date parsing using `strptime` is significantly slower compared to `fromisoformat`.
 **Action:** When querying large local SQLite databases (like GarminDB), push down WHERE clauses to filter large datasets at the database level instead of in-memory. For date string parsing, use string slicing and `datetime.date.fromisoformat` over `datetime.datetime.strptime` where the string format allows (e.g., extracting "YYYY-MM-DD" from "YYYY-MM-DD HH:MM:SS").
+
+## 2023-10-27 - [Avoid Cartesian Products in Django Aggregations]
+**Learning:** In Django, when aggregating multiple independent relationships (like `activities` and `b_races` on `TrainingBlock`), performing simple `.annotate(Sum('...'))` can cause SQL JOIN fanout (Cartesian products). This historically led to bringing all relationships into Python memory (e.g., `prefetch_related` and loop sums) which acts as a major bottleneck as rows scale.
+**Action:** Use database-level subqueries (`OuterRef` and `Subquery`) inside `annotate` for each relation independently. This pushes the aggregation logic to the database while eliminating JOIN fanouts and reducing memory usage significantly.
