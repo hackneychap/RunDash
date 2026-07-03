@@ -341,8 +341,28 @@ def block_compare(request):
 def blocks_list(request):
     """List all training blocks with summary stats."""
     today = date.today()
-    all_blocks = TrainingBlock.objects.select_related('a_race').prefetch_related(
-        'activities', 'b_races'
+    from django.db.models import Sum, Count, Subquery, OuterRef
+    from .models import RunActivity, BRace
+
+    # ⚡ Bolt Optimization: Use Subquery to push down aggregations to the database
+    # Replaces python-level iteration over prefetched objects, significantly reducing memory and execution time
+    activities_subquery = RunActivity.objects.filter(
+        training_block=OuterRef('pk')
+    ).values('training_block').annotate(
+        total_km=Sum('distance_km'),
+        run_count=Count('id')
+    )
+
+    b_races_subquery = BRace.objects.filter(
+        training_block=OuterRef('pk')
+    ).values('training_block').annotate(
+        b_count=Count('id')
+    )
+
+    all_blocks = TrainingBlock.objects.select_related('a_race').annotate(
+        total_km_agg=Subquery(activities_subquery.values('total_km')),
+        total_runs_agg=Subquery(activities_subquery.values('run_count')),
+        b_races_count_agg=Subquery(b_races_subquery.values('b_count'))
     ).order_by('-start_date')
 
     # Annotate each block with stats
@@ -360,13 +380,9 @@ def blocks_list(request):
         duration_days = (block.end_date - block.start_date).days
         duration_weeks = max(round(duration_days / 7), 1)
 
-        # Summary stats from prefetched activities (no extra query)
-        activities = block.activities.all()
-        total_km = sum(a.distance_km or 0 for a in activities)
-        total_runs = len(activities)
-
-        # B races count from prefetched (no extra query)
-        b_races_count = len(block.b_races.all())
+        total_km = block.total_km_agg or 0
+        total_runs = block.total_runs_agg or 0
+        b_races_count = block.b_races_count_agg or 0
 
         blocks_with_stats.append({
             'block': block,
