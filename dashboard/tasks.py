@@ -121,9 +121,7 @@ def sync_garmin_data():
     os.makedirs(STAGING_DIR, exist_ok=True)
     os.makedirs(PROCESSED_DIR, exist_ok=True)
 
-    cmd = [python_exec, garmindb_cli, "--download", "--all"]
-    if not is_first_run:
-        cmd.append("--latest")
+    cmd = [python_exec, garmindb_cli, "--download", "--activities", "--latest"]
 
     print(f"Starting download command: {cmd}")
     try:
