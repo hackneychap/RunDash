@@ -1,6 +1,7 @@
 """Signal handlers for dashboard models."""
 
-from django.db.models.signals import post_save
+from django.core.cache import cache
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
 from .models import RunActivity, TrainingBlock
@@ -45,3 +46,9 @@ def link_runs_to_block(block, dry_run=False):
 def training_block_saved(sender, instance, created, **kwargs):
     """When a TrainingBlock is created or its dates change, re-link runs."""
     link_runs_to_block(instance)
+
+
+@receiver([post_save, post_delete], sender=RunActivity)
+def invalidate_dashboard_cache(sender, instance, **kwargs):
+    """Clear the dashboard cache when any run activity is modified or deleted."""
+    cache.delete('dashboard_context')
