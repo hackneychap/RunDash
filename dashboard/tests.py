@@ -48,9 +48,10 @@ class TriggerSyncViewTests(TestCase):
         self.assertIn('Syncing with Garmin', response.content.decode())
 
 class SyncTaskTests(TestCase):
+    @patch('os.path.exists', return_value=True)
     @patch('dashboard.tasks.subprocess.run')
     @patch('dashboard.tasks.sqlite3.connect')
-    def test_sync_garmin_data_imports_elevation_gain(self, mock_connect, mock_subprocess):
+    def test_sync_garmin_data_imports_elevation_gain(self, mock_connect, mock_subprocess, mock_exists):
         # Mock environment variables
         with patch.dict('os.environ', {'GARMIN_USERNAME': 'test', 'GARMIN_PASSWORD': 'test'}):
             # Setup mock SQLite connection
